@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/gocrane-io/crane/pkg/ensurance/cache"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -16,6 +17,7 @@ import (
 	ensuaranceapi "github.com/gocrane-io/api/ensurance/v1alpha1"
 	"github.com/gocrane-io/crane/cmd/crane-agent/app/options"
 	ensurancecontroller "github.com/gocrane-io/crane/pkg/controller/ensurance"
+	"github.com/gocrane-io/crane/pkg/ensurance/nep"
 	"github.com/gocrane-io/crane/pkg/utils/clogs"
 )
 
@@ -66,6 +68,7 @@ func Run(ctx context.Context, opts *options.Options) error {
 		HealthProbeBindAddress: opts.BindAddr,
 		Port:                   int(opts.WebhookPort),
 		Host:                   opts.WebhookHost,
+		LeaderElection:         false,
 	})
 	if err != nil {
 		clogs.Log().Error(err, "unable to start crane agent")
@@ -91,15 +94,33 @@ func Run(ctx context.Context, opts *options.Options) error {
 // initializationControllers setup controllers with manager
 func initializationControllers(mgr ctrl.Manager, opts *options.Options) {
 	clogs.Log().Info(fmt.Sprintf("opts %v", opts))
-	nepRecorder := mgr.GetEventRecorderFor("node-qos-ensurance-policy-controller")
+
+	nepRecorder := mgr.GetEventRecorderFor("node-qos-controller")
+
+	var nodeDetectionCache = cache.DetectionConditionCache{}
+
 	if err := (&ensurancecontroller.NodeQOSEnsurancePolicyController{
-		Client:     mgr.GetClient(),
-		Log:        clogs.Log().WithName("node-qos-controller"),
-		Scheme:     mgr.GetScheme(),
-		RestMapper: mgr.GetRESTMapper(),
-		Recorder:   nepRecorder,
+		Client:         mgr.GetClient(),
+		Log:            clogs.Log().WithName("node-qos-controller"),
+		Scheme:         mgr.GetScheme(),
+		RestMapper:     mgr.GetRESTMapper(),
+		Recorder:       nepRecorder,
+		Cache:          &nep.NodeQOSEnsurancePolicyCache{},
+		DetectionCache: &nodeDetectionCache,
 	}).SetupWithManager(mgr); err != nil {
 		clogs.Log().Error(err, "unable to create controller", "controller", "NodeQOSEnsurancePolicyController")
+		os.Exit(1)
+	}
+
+	if err := (&ensurancecontroller.AvoidanceActionController{
+		Client:         mgr.GetClient(),
+		Log:            clogs.Log().WithName("avoidance-controller"),
+		Scheme:         mgr.GetScheme(),
+		RestMapper:     mgr.GetRESTMapper(),
+		Recorder:       nepRecorder,
+		DetectionCache: &nodeDetectionCache,
+	}).SetupWithManager(mgr); err != nil {
+		clogs.Log().Error(err, "unable to create controller", "controller", "AvoidanceActionController")
 		os.Exit(1)
 	}
 }

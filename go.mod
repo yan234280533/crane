@@ -23,7 +23,7 @@ require (
 )
 
 replace (
-	github.com/gocrane-io/api => github.com/yan234280533/api v0.0.0-20211120131439-7bb31c8faac1
+	github.com/gocrane-io/api => github.com/yan234280533/api v0.0.0-20211122035224-8cf12a4c7c2f
 	golang.org/x/net => github.com/golang/net v0.0.0-20210825183410-e898025ed96a
 	k8s.io/api => k8s.io/api v0.22.3
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.22.3

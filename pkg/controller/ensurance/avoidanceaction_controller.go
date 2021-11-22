@@ -19,18 +19,25 @@ package controllers
 import (
 	"context"
 
+	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	ensurancecraneiov1alpha1 "github.com/gocrane-io/api/ensurance/v1alpha1"
+	"github.com/gocrane-io/crane/pkg/ensurance/cache"
 )
 
 // AvoidanceActionController reconciles a AvoidanceAction object
 type AvoidanceActionController struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme         *runtime.Scheme
+	Log            logr.Logger
+	RestMapper     meta.RESTMapper
+	Recorder       record.EventRecorder
+	DetectionCache *cache.DetectionConditionCache
 }
 
 //+kubebuilder:rbac:groups=ensurance.crane.io.crane.io,resources=AvoidanceActiones,verbs=get;list;watch;create;update;patch;delete
@@ -47,7 +54,6 @@ type AvoidanceActionController struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *AvoidanceActionController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
 
 	// your logic here
 
