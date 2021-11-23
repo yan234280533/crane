@@ -65,7 +65,7 @@ func (s *DetectionConditionCache) Exist(key string) bool {
 	return ok
 }
 
-func (s *DetectionConditionCache) allDetections() []DetectionCondition {
+func (s *DetectionConditionCache) ListDetections() []DetectionCondition {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

@@ -6,14 +6,16 @@ import (
 
 // Options hold the command-line options about crane manager
 type Options struct {
-	// MetricsAddr is The address the metric endpoint binds to.
+	// MetricsAddr is the address the metric endpoint binds to.
 	MetricsAddr string
-	// BindAddr is The address the probe endpoint binds to.
+	// BindAddr is the address the probe endpoint binds to.
 	BindAddr string
-	// WebhookHost is The address webhook binds to.
+	// WebhookHost is the address webhook binds to.
 	WebhookHost string
-	// WebhookPort is The port webhook binds to.
+	// WebhookPort is the port webhook binds to.
 	WebhookPort uint64
+	// HostnameOverride is the name of k8s node
+	HostnameOverride string
 }
 
 // NewOptions builds an empty options.
@@ -37,4 +39,5 @@ func (o *Options) AddFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&o.BindAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flags.StringVar(&o.WebhookHost, "webhook-host", "0.0.0.0", "The address webhook binds to.")
 	flags.Uint64Var(&o.WebhookPort, "webhook-port", 9443, "The port webhook binds to.")
+	flags.StringVar(&o.HostnameOverride, "hostname-override", o.HostnameOverride, "which is the name of k8s node be used to filtered.")
 }

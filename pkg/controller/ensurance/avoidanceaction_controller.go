@@ -55,8 +55,7 @@ type AvoidanceActionController struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *AvoidanceActionController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
-	// your logic here
-
+	ctrl.Watch()
 	return ctrl.Result{}, nil
 }
 

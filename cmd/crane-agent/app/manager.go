@@ -4,19 +4,28 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/gocrane-io/crane/pkg/ensurance/avoidance"
 	"github.com/gocrane-io/crane/pkg/ensurance/cache"
+	"github.com/golang/glog"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes"
 	"os"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"time"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	kubeinformers "k8s.io/client-go/informers"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	ensuaranceapi "github.com/gocrane-io/api/ensurance/v1alpha1"
+	ensuaranceset "github.com/gocrane-io/api/pkg/generated/clientset/versioned"
 	"github.com/gocrane-io/crane/cmd/crane-agent/app/options"
 	ensurancecontroller "github.com/gocrane-io/crane/pkg/controller/ensurance"
+	einformer "github.com/gocrane-io/crane/pkg/ensurance/informer"
 	"github.com/gocrane-io/crane/pkg/ensurance/nep"
 	"github.com/gocrane-io/crane/pkg/utils/clogs"
 )
@@ -112,15 +121,20 @@ func initializationControllers(mgr ctrl.Manager, opts *options.Options) {
 		os.Exit(1)
 	}
 
-	if err := (&ensurancecontroller.AvoidanceActionController{
-		Client:         mgr.GetClient(),
-		Log:            clogs.Log().WithName("avoidance-controller"),
-		Scheme:         mgr.GetScheme(),
-		RestMapper:     mgr.GetRESTMapper(),
-		Recorder:       nepRecorder,
-		DetectionCache: &nodeDetectionCache,
-	}).SetupWithManager(mgr); err != nil {
-		clogs.Log().Error(err, "unable to create controller", "controller", "AvoidanceActionController")
-		os.Exit(1)
-	}
+	//New avoidance manager
+	generatedClient := kubernetes.NewForConfigOrDie(mgr.GetConfig())
+	clientSet := ensuaranceset.NewForConfigOrDie(mgr.GetConfig())
+
+	ctx := einformer.NewContextInitWithClient(generatedClient, clientSet, opts.HostnameOverride)
+	podInformer := ctx.GetPodFactory().Core().V1().Pods().Informer()
+	nodeInformer := ctx.GetNodeFactory().Core().V1().Nodes().Informer()
+	avoidanceInformer := ctx.GetAvoidanceFactory().Ensurance().V1alpha1().AvoidanceActions().Informer()
+
+	stopChannel := make(chan struct{})
+	ctx.Run(stopChannel)
+
+	avoidanceManager := avoidance.NewAvoidanceManager(podInformer, nodeInformer, avoidanceInformer)
+	avoidanceManager.Run(stopChannel)
+
+	return
 }
