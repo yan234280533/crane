@@ -135,10 +135,13 @@ func initializationControllers(mgr ctrl.Manager, opts *options.Options) {
 	stopChannel := make(chan struct{})
 	ctx.Run(stopChannel)
 
+	var noticeCh = make(chan analyzer.AvoidanceActionStruct)
+
 	avoidanceManager := avoidance.NewAvoidanceManager(podInformer, nodeInformer, avoidanceInformer)
 	avoidanceManager.Run(stopChannel)
 
-	analyzer.NewAnalyzerManager(podInformer, nodeInformer, nepInformer)
+	analyzerManager := analyzer.NewAnalyzerManager(podInformer, nodeInformer, nepInformer)
+	analyzerManager.Run(stopChannel)
 
 	return
 }

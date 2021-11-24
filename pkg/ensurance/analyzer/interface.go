@@ -7,7 +7,3 @@ import (
 type Analyzer interface {
 	manager.Manager
 }
-
-type AnalyzerInternal interface {
-	Analyze()
-}
