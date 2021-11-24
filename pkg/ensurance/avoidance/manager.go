@@ -1,17 +1,22 @@
 package avoidance
 
 import (
+	"fmt"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"time"
 
 	"github.com/gocrane-io/crane/pkg/utils/clogs"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
 	ecache "github.com/gocrane-io/crane/pkg/ensurance/cache"
+	einformer "github.com/gocrane-io/crane/pkg/ensurance/informer"
 )
 
 type AvoidanceManager struct {
+	nodeName                string
+	client                  clientset.Interface
 	podInformer             cache.SharedIndexInformer
 	nodeInformer            cache.SharedIndexInformer
 	avoidanceInformer       cache.SharedIndexInformer
@@ -21,9 +26,11 @@ type AvoidanceManager struct {
 }
 
 // AvoidanceManager create avoidance manager
-func NewAvoidanceManager(podInformer cache.SharedIndexInformer, nodeInformer cache.SharedIndexInformer, avoidanceInformer cache.SharedIndexInformer,
+func NewAvoidanceManager(client clientset.Interface, nodeName string, podInformer cache.SharedIndexInformer, nodeInformer cache.SharedIndexInformer, avoidanceInformer cache.SharedIndexInformer,
 	detectionConditionCache ecache.DetectionConditionCache) *AvoidanceManager {
 	return &AvoidanceManager{
+		nodeName:                nodeName,
+		client:                  client,
 		podInformer:             podInformer,
 		nodeInformer:            nodeInformer,
 		avoidanceInformer:       avoidanceInformer,
@@ -97,17 +104,73 @@ func (a *AvoidanceManager) doMerge(dcs []ecache.DetectionCondition, stop <-chan 
 
 func (a *AvoidanceManager) doAction(s AvoidanceActionStruct, stop <-chan struct{}) error {
 	//step1 do BlockScheduled action
+	if err := a.blockScheduled(s.BlockScheduledAction, stop); err != nil {
+		return err
+	}
+
 	//step2 do Evict action
+	if err := a.evictAction(s.EvictActions, stop); err != nil {
+		return err
+	}
+
 	//step3 do Throttle action
+
+	return nil
 }
 
 func (a *AvoidanceManager) blockScheduled(bsa *BlockScheduledActionStruct, stop <-chan struct{}) error {
-	//
+	// step1: get node
+	node, err := einformer.GetNodeFromInformer(a.nodeInformer, a.nodeName)
+	if err != nil {
+		return err
+	}
+
+	clogs.Log().V(6).Info(fmt.Sprintf("node condition %+v", node.Status.Conditions))
+
+	// step2 update node condition for block scheduled
+	if bsa.BlockScheduledQOSPriority != nil {
+		// einformer.updateNodeConditions
+		// einformer.updateNodeStatus
+	}
+
+	// step2 update node condition for restored scheduled
+	if bsa.RestoreScheduledQOSPriority != nil {
+		// einformer.updateNodeConditions
+		// einformer.updateNodeStatus
+	}
+
+	return nil
+}
+
+func (a *AvoidanceManager) evictAction(ea []EvictActionStruct, stop <-chan struct{}) error {
+	var bSucceed bool
+
+	for _, e := range ea {
+		for _, podNamespace := range e.EvictPods {
+			pod, err := einformer.GetPodFromInformer(a.podInformer, podNamespace.String())
+			if err != nil {
+				bSucceed = false
+				continue
+			}
+			clogs.Log().V(5).Info("pod %+v", pod)
+			//go einformer.EvictPodWithGracePeriod(a.client,pod,einformer.GetGracePeriodSeconds(e.DeletionGracePeriodSeconds))
+		}
+	}
+
+	if !bSucceed {
+		return fmt.Errorf("some pod evict failed")
+	}
+
+	return nil
+}
+
+func (a *AvoidanceManager) throttleAction(bsa *BlockScheduledActionStruct, stop <-chan struct{}) error {
+
 }
 
 type AvoidanceActionStruct struct {
 	BlockScheduledAction *BlockScheduledActionStruct
-	ThrottleActions      []CPUThrottleActionStruct
+	ThrottleActions      []ThrottleActionStruct
 	EvictActions         []EvictActionStruct
 }
 

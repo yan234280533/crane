@@ -11,6 +11,10 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
+const (
+	defaultGracePeriodSeconds = uint64(30)
+)
+
 //EvictPodWithGracePeriod evict pod with grace period
 func EvictPodWithGracePeriod(client clientset.Interface, pod *v1.Pod, gracePeriodSeconds int64) error {
 	e := &policyv1beta1.Eviction{
@@ -55,4 +59,12 @@ func GetPodFromInformer(podInformer cache.SharedIndexInformer, key string) (*v1.
 
 func generateKey(namespace string, podName string) string {
 	return fmt.Sprintf("%s/%s", namespace, podName)
+}
+
+func GetGracePeriodSeconds(gracePeriodSeconds *uint64) uint64 {
+	if gracePeriodSeconds == nil {
+		return defaultGracePeriodSeconds
+	}
+
+	return *gracePeriodSeconds
 }
