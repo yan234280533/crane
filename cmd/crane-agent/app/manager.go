@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/gocrane-io/crane/pkg/ensurance/analyzer"
 	"github.com/gocrane-io/crane/pkg/ensurance/avoidance"
 	"github.com/gocrane-io/crane/pkg/ensurance/cache"
 	"github.com/golang/glog"
@@ -129,12 +130,15 @@ func initializationControllers(mgr ctrl.Manager, opts *options.Options) {
 	podInformer := ctx.GetPodFactory().Core().V1().Pods().Informer()
 	nodeInformer := ctx.GetNodeFactory().Core().V1().Nodes().Informer()
 	avoidanceInformer := ctx.GetAvoidanceFactory().Ensurance().V1alpha1().AvoidanceActions().Informer()
+	nepInformer := ctx.GetAvoidanceFactory().Ensurance().V1alpha1().NodeQOSEnsurancePolicies().Informer()
 
 	stopChannel := make(chan struct{})
 	ctx.Run(stopChannel)
 
 	avoidanceManager := avoidance.NewAvoidanceManager(podInformer, nodeInformer, avoidanceInformer)
 	avoidanceManager.Run(stopChannel)
+
+	analyzer.NewAnalyzerManager(podInformer, nodeInformer, nepInformer)
 
 	return
 }

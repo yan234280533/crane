@@ -1,11 +1,9 @@
 package avoidance
 
 import (
-
 	"fmt"
+	"github.com/gocrane-io/crane/pkg/ensurance/analyzer"
 
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sync"
 	"time"
 
@@ -15,7 +13,6 @@ import (
 
 	ecache "github.com/gocrane-io/crane/pkg/ensurance/cache"
 	einformer "github.com/gocrane-io/crane/pkg/ensurance/informer"
-	collect "github.com/gocrane-io/crane/pkg/ensurance/collector"
 )
 
 type AvoidanceManager struct {
@@ -25,8 +22,8 @@ type AvoidanceManager struct {
 	nodeInformer            cache.SharedIndexInformer
 	avoidanceInformer       cache.SharedIndexInformer
 	detectionConditionCache ecache.DetectionConditionCache
-	dcsOlder []ecache.DetectionCondition
-	NodeStatus sync.Map
+	dcsOlder                []ecache.DetectionCondition
+	NodeStatus              sync.Map
 }
 
 // AvoidanceManager create avoidance manager
@@ -40,28 +37,6 @@ func NewAvoidanceManager(client clientset.Interface, nodeName string, podInforme
 		avoidanceInformer:       avoidanceInformer,
 		detectionConditionCache: detectionConditionCache,
 	}
-}
-
-func (a *AvoidanceManager) StartCollectors(stop <-chan struct{}) {
-	e := collect.NewEBPF()
-	n := collect.NewNodeLocal()
-	m := collect.NewMetricsServer()
-	collectors := []collect.Collector{e, n, m}
-	go func() {
-		updateTicker := time.NewTicker(10 * time.Second)
-		defer updateTicker.Stop()
-		for {
-			select {
-			case <-updateTicker.C:
-				clogs.Log().Info("Avoidance run periodically")
-				for _, c := range collectors {
-					c.Collect()
-					a.NodeStatus.Store(c.GetName(), c.List())
-				}
-			case <-stop:
-			}
-		}
-	}()
 }
 
 // Run does nothing
@@ -120,15 +95,15 @@ func (a *AvoidanceManager) doLogEvent(dcs []ecache.DetectionCondition) {
 	//step2 produce event
 }
 
-func (a *AvoidanceManager) doMerge(dcs []ecache.DetectionCondition, stop <-chan struct{}) (AvoidanceActionStruct, error) {
+func (a *AvoidanceManager) doMerge(dcs []ecache.DetectionCondition, stop <-chan struct{}) (analyzer.AvoidanceActionStruct, error) {
 	//step1 filter the only dryRun detection
 	//step2 do BlockScheduled merge
 	//step3 do Throttle merge FilterAndSortThrottlePods
 	//step3 do Evict merge  FilterAndSortEvictPods
-	return AvoidanceActionStruct{}, nil
+	return analyzer.AvoidanceActionStruct{}, nil
 }
 
-func (a *AvoidanceManager) doAction(s AvoidanceActionStruct, stop <-chan struct{}) error {
+func (a *AvoidanceManager) doAction(s analyzer.AvoidanceActionStruct, stop <-chan struct{}) error {
 	//step1 do BlockScheduled action
 	if err := a.blockScheduled(s.BlockScheduledAction, stop); err != nil {
 		return err
@@ -144,7 +119,7 @@ func (a *AvoidanceManager) doAction(s AvoidanceActionStruct, stop <-chan struct{
 	return nil
 }
 
-func (a *AvoidanceManager) blockScheduled(bsa *BlockScheduledActionStruct, stop <-chan struct{}) error {
+func (a *AvoidanceManager) blockScheduled(bsa *analyzer.BlockScheduledActionStruct, stop <-chan struct{}) error {
 	// step1: get node
 	node, err := einformer.GetNodeFromInformer(a.nodeInformer, a.nodeName)
 	if err != nil {
@@ -168,7 +143,7 @@ func (a *AvoidanceManager) blockScheduled(bsa *BlockScheduledActionStruct, stop 
 	return nil
 }
 
-func (a *AvoidanceManager) evictAction(ea []EvictActionStruct, stop <-chan struct{}) error {
+func (a *AvoidanceManager) evictAction(ea []analyzer.EvictActionStruct, stop <-chan struct{}) error {
 	var bSucceed bool
 
 	for _, e := range ea {
@@ -190,54 +165,6 @@ func (a *AvoidanceManager) evictAction(ea []EvictActionStruct, stop <-chan struc
 	return nil
 }
 
-func (a *AvoidanceManager) throttleAction(bsa *BlockScheduledActionStruct, stop <-chan struct{}) error {
+func (a *AvoidanceManager) throttleAction(bsa *analyzer.BlockScheduledActionStruct, stop <-chan struct{}) error {
 
-}
-
-type AvoidanceActionStruct struct {
-	BlockScheduledAction *BlockScheduledActionStruct
-	ThrottleActions      []ThrottleActionStruct
-	EvictActions         []EvictActionStruct
-}
-
-type BlockScheduledActionStruct struct {
-	BlockScheduledQOSPriority   *ScheduledQOSPriority
-	RestoreScheduledQOSPriority *ScheduledQOSPriority
-}
-
-type ScheduledQOSPriority struct {
-	PodQOSClass        v1.PodQOSClass
-	PriorityClassValue uint64
-}
-
-type CPUThrottleActionStruct struct {
-	CPUDownAction *CPURatioStruct
-	CPUUpAction   *CPURatioStruct
-}
-
-type CPURatioStruct struct {
-	//the min of cpu ratio for pods
-	// +optional
-	MinCPURatio uint64 `json:"minCPURatio,omitempty"`
-
-	//the step of cpu share and limit for once down-size (1-100)
-	// +optional
-	StepCPURatio uint64 `json:"stepCPURatio,omitempty"`
-}
-
-type MemoryThrottleActionStruct struct {
-	// to force gc the page cache of low level pods
-	// +optional
-	ForceGC bool `json:"forceGC,omitempty"`
-}
-
-type ThrottleActionStruct struct {
-	CPUThrottle    *CPUThrottleActionStruct
-	MemoryThrottle *MemoryThrottleActionStruct
-	ThrottlePods   []types.NamespacedName
-}
-
-type EvictActionStruct struct {
-	DeletionGracePeriodSeconds *int32 `json:"deletionGracePeriodSeconds,omitempty"`
-	EvictPods                  []types.NamespacedName
 }

@@ -1,4 +1,4 @@
-package collector
+package collect
 
 import (
 	"fmt"
@@ -6,27 +6,27 @@ import (
 )
 
 type EBPF struct {
-	Name string
+	Name        string
 	StatusCache sync.Map
 }
 
-func (e *EBPF)GetName() string {
+func (e *EBPF) GetName() string {
 	return e.Name
 }
 
-func NewEBPF() *EBPF{
+func NewEBPF() *EBPF {
 	e := EBPF{
-		Name: "ebpf",
+		Name:        "ebpf",
 		StatusCache: sync.Map{},
 	}
 	return &e
 }
 
-func (e *EBPF) Collect(){
+func (e *EBPF) Collect() {
 	fmt.Println("ebpf collecting")
 }
 
-func (e *EBPF) List() sync.Map{
+func (e *EBPF) List() sync.Map {
 	fmt.Println("ebpf listing")
 	return e.StatusCache
 }

@@ -68,3 +68,18 @@ func GetGracePeriodSeconds(gracePeriodSeconds *uint64) uint64 {
 
 	return *gracePeriodSeconds
 }
+
+func GetAllNepFromInformer(nepInformer cache.SharedIndexInformer) []*v1.Pod {
+	if podInformer == nil {
+		return []*v1.Pod{}
+	}
+
+	var podList []*v1.Pod
+	allPods := podInformer.GetStore().List()
+	for _, p := range allPods {
+		pod := p.(*v1.Pod)
+		podList = append(podList, pod)
+	}
+
+	return podList
+}
