@@ -1,9 +1,12 @@
 package avoidance
 
 import (
+
 	"fmt"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sync"
 	"time"
 
 	"github.com/gocrane-io/crane/pkg/utils/clogs"
@@ -12,6 +15,7 @@ import (
 
 	ecache "github.com/gocrane-io/crane/pkg/ensurance/cache"
 	einformer "github.com/gocrane-io/crane/pkg/ensurance/informer"
+	collect "github.com/gocrane-io/crane/pkg/ensurance/collector"
 )
 
 type AvoidanceManager struct {
@@ -21,8 +25,8 @@ type AvoidanceManager struct {
 	nodeInformer            cache.SharedIndexInformer
 	avoidanceInformer       cache.SharedIndexInformer
 	detectionConditionCache ecache.DetectionConditionCache
-
 	dcsOlder []ecache.DetectionCondition
+	NodeStatus sync.Map
 }
 
 // AvoidanceManager create avoidance manager
@@ -36,6 +40,28 @@ func NewAvoidanceManager(client clientset.Interface, nodeName string, podInforme
 		avoidanceInformer:       avoidanceInformer,
 		detectionConditionCache: detectionConditionCache,
 	}
+}
+
+func (a *AvoidanceManager) StartCollectors(stop <-chan struct{}) {
+	e := collect.NewEBPF()
+	n := collect.NewNodeLocal()
+	m := collect.NewMetricsServer()
+	collectors := []collect.Collector{e, n, m}
+	go func() {
+		updateTicker := time.NewTicker(10 * time.Second)
+		defer updateTicker.Stop()
+		for {
+			select {
+			case <-updateTicker.C:
+				clogs.Log().Info("Avoidance run periodically")
+				for _, c := range collectors {
+					c.Collect()
+					a.NodeStatus.Store(c.GetName(), c.List())
+				}
+			case <-stop:
+			}
+		}
+	}()
 }
 
 // Run does nothing
