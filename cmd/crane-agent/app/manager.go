@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/gocrane-io/crane/pkg/ensurance/analyzer"
 	"github.com/gocrane-io/crane/pkg/ensurance/avoidance"
-	"github.com/gocrane-io/crane/pkg/ensurance/cache"
+	"github.com/gocrane-io/crane/pkg/ensurance/executor"
 	"github.com/gocrane-io/crane/pkg/ensurance/statestore"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -22,6 +22,7 @@ import (
 	"github.com/gocrane-io/crane/cmd/crane-agent/app/options"
 	ensurancecontroller "github.com/gocrane-io/crane/pkg/controller/ensurance"
 	einformer "github.com/gocrane-io/crane/pkg/ensurance/informer"
+	"github.com/gocrane-io/crane/pkg/ensurance/manager"
 	"github.com/gocrane-io/crane/pkg/ensurance/nep"
 	"github.com/gocrane-io/crane/pkg/utils/clogs"
 )
@@ -85,7 +86,20 @@ func Run(ctx context.Context, opts *options.Options) error {
 		return err
 	}
 
-	initializationControllers(mgr, opts)
+	clogs.Log().Info(fmt.Sprintf("opts %v", opts))
+
+	// init context
+	ec := initializationContext(mgr, opts)
+	ec.Run()
+
+	// init components
+	components := initializationComponents(mgr, opts, ec)
+
+	// start managers
+	for _, v := range components {
+		clogs.Log().Info("Starting manager %s", v.Name())
+		v.Run(ec.GetStopChannel())
+	}
 
 	clogs.Log().Info("Starting crane agent")
 	if err := mgr.Start(ctx); err != nil {
@@ -96,38 +110,30 @@ func Run(ctx context.Context, opts *options.Options) error {
 	return nil
 }
 
-// initializationControllers setup controllers with manager
-func initializationControllers(mgr ctrl.Manager, opts *options.Options) {
-	clogs.Log().Info(fmt.Sprintf("opts %v", opts))
+func initializationComponents(mgr ctrl.Manager, opts *options.Options, ec *einformer.Context) []manager.Manager {
+	clogs.Log().Info(fmt.Sprintf("initializationComponents"))
 
-	nepRecorder := mgr.GetEventRecorderFor("node-qos-controller")
+	var managers []manager.Manager
+	podInformer := ec.GetPodFactory().Core().V1().Pods().Informer()
+	nodeInformer := ec.GetNodeFactory().Core().V1().Nodes().Informer()
+	nepInformer := ec.GetAvoidanceFactory().Ensurance().V1alpha1().NodeQOSEnsurancePolicies().Informer()
+	avoidanceInformer := ec.GetAvoidanceFactory().Ensurance().V1alpha1().AvoidanceActions().Informer()
 
-	var nodeDetectionCache = cache.DetectionConditionCache{}
-
-	//New avoidance manager
-	generatedClient := kubernetes.NewForConfigOrDie(mgr.GetConfig())
-	clientSet := ensuaranceset.NewForConfigOrDie(mgr.GetConfig())
-
-	ctx := einformer.NewContextInitWithClient(generatedClient, clientSet, opts.HostnameOverride)
-	podInformer := ctx.GetPodFactory().Core().V1().Pods().Informer()
-	nodeInformer := ctx.GetNodeFactory().Core().V1().Nodes().Informer()
-	nepInformer := ctx.GetAvoidanceFactory().Ensurance().V1alpha1().NodeQOSEnsurancePolicies().Informer()
-	avoidanceInformer := ctx.GetAvoidanceFactory().Ensurance().V1alpha1().AvoidanceActions().Informer()
-
-	stopChannel := make(chan struct{})
-	ctx.Run(stopChannel)
-
+	// init state store manager
 	stateStoreManager := statestore.NewStateStoreManager()
-	stateStoreManager.Run(stopChannel)
+	managers = append(managers, stateStoreManager)
 
-	var noticeCh = make(chan analyzer.AvoidanceActionStruct)
-
-	avoidanceManager := avoidance.NewAvoidanceManager(generatedClient, opts.HostnameOverride, podInformer, nodeInformer, avoidanceInformer, noticeCh)
-	avoidanceManager.Run(stopChannel)
-
+	// init analyzer manager
 	analyzerManager := analyzer.NewAnalyzerManager(podInformer, nodeInformer, avoidanceInformer, nepInformer, noticeCh)
-	analyzerManager.Run(stopChannel)
+	managers = append(managers, analyzerManager)
 
+	// init avoidance manager
+	var noticeCh = make(chan executor.AvoidanceExecutorStruct)
+	avoidanceManager := avoidance.NewAvoidanceManager(ec.GetKubeClient(), opts.HostnameOverride, podInformer, nodeInformer, avoidanceInformer, noticeCh)
+	managers = append(managers, avoidanceManager)
+
+	// init nep controller
+	nepRecorder := mgr.GetEventRecorderFor("node-qos-controller")
 	if err := (&ensurancecontroller.NodeQOSEnsurancePolicyController{
 		Client:     mgr.GetClient(),
 		Log:        clogs.Log().WithName("node-qos-controller"),
@@ -135,11 +141,20 @@ func initializationControllers(mgr ctrl.Manager, opts *options.Options) {
 		RestMapper: mgr.GetRESTMapper(),
 		Recorder:   nepRecorder,
 		Cache:      &nep.NodeQOSEnsurancePolicyCache{},
-		Statestore: stateStoreManager,
+		StateStore: stateStoreManager,
 	}).SetupWithManager(mgr); err != nil {
 		clogs.Log().Error(err, "unable to create controller", "controller", "NodeQOSEnsurancePolicyController")
 		os.Exit(1)
 	}
 
-	return
+	return managers
+}
+
+func initializationContext(mgr ctrl.Manager, opts *options.Options) *einformer.Context {
+	clogs.Log().Info(fmt.Sprintf("initializationContext"))
+
+	generatedClient := kubernetes.NewForConfigOrDie(mgr.GetConfig())
+	clientSet := ensuaranceset.NewForConfigOrDie(mgr.GetConfig())
+
+	return einformer.NewContextInitWithClient(generatedClient, clientSet, opts.HostnameOverride)
 }

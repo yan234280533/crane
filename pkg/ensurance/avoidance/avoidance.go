@@ -1,20 +1,17 @@
 package avoidance
 
 import (
-	"fmt"
-	"github.com/gocrane-io/crane/pkg/ensurance/analyzer"
+	"github.com/gocrane-io/crane/pkg/ensurance/executor"
 
 	"github.com/gocrane-io/crane/pkg/utils/clogs"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-
-	einformer "github.com/gocrane-io/crane/pkg/ensurance/informer"
 )
 
 type AvoidanceManager struct {
 	nodeName          string
 	client            clientset.Interface
-	noticeCh          <-chan analyzer.AvoidanceActionStruct
+	noticeCh          <-chan executor.AvoidanceExecutorStruct
 	podInformer       cache.SharedIndexInformer
 	nodeInformer      cache.SharedIndexInformer
 	avoidanceInformer cache.SharedIndexInformer
@@ -22,7 +19,7 @@ type AvoidanceManager struct {
 
 // AvoidanceManager create avoidance manager
 func NewAvoidanceManager(client clientset.Interface, nodeName string, podInformer cache.SharedIndexInformer, nodeInformer cache.SharedIndexInformer,
-	avoidanceInformer cache.SharedIndexInformer, noticeCh <-chan analyzer.AvoidanceActionStruct) *AvoidanceManager {
+	avoidanceInformer cache.SharedIndexInformer, noticeCh <-chan executor.AvoidanceExecutorStruct) *AvoidanceManager {
 	return &AvoidanceManager{
 		nodeName:          nodeName,
 		client:            client,
@@ -31,6 +28,10 @@ func NewAvoidanceManager(client clientset.Interface, nodeName string, podInforme
 		nodeInformer:      nodeInformer,
 		avoidanceInformer: avoidanceInformer,
 	}
+}
+
+func (a *AvoidanceManager) Name() string {
+	return "AvoidanceManager"
 }
 
 // Run does nothing
@@ -57,71 +58,64 @@ func (a *AvoidanceManager) Run(stop <-chan struct{}) {
 	return
 }
 
-func (a *AvoidanceManager) doAction(s analyzer.AvoidanceActionStruct, stop <-chan struct{}) error {
+func (a *AvoidanceManager) doAction(ae executor.AvoidanceExecutorStruct, stop <-chan struct{}) error {
+
+	var ctx = &executor.ExecuteContext{
+		NodeName:     a.nodeName,
+		Client:       a.client,
+		PodInformer:  a.podInformer,
+		NodeInformer: a.nodeInformer,
+	}
+
+	//step1 do avoidance actions
+	if err := doAvoidance(ctx, ae); err != nil {
+		return err
+	}
+
+	//step2 do restoration actions
+	if err := doRestoration(ctx, ae); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func doAvoidance(ctx *executor.ExecuteContext, ae executor.AvoidanceExecutorStruct) error {
+
 	//step1 do BlockScheduled action
-	if err := a.blockScheduled(s.BlockScheduledAction, stop); err != nil {
+	if err := ae.BlockScheduledExecutor.Avoid(ctx); err != nil {
 		return err
 	}
 
 	//step2 do Evict action
-	if err := a.evictAction(s.EvictActions, stop); err != nil {
+	if err := ae.EvictExecutor.Avoid(ctx); err != nil {
 		return err
 	}
 
 	//step3 do Throttle action
-	if err := a.throttleAction(s.ThrottleActions, stop); err != nil {
+	if err := ae.ThrottleExecutor.Avoid(ctx); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (a *AvoidanceManager) blockScheduled(bsa *analyzer.BlockScheduledActionStruct, stop <-chan struct{}) error {
-	// step1: get node
-	node, err := einformer.GetNodeFromInformer(a.nodeInformer, a.nodeName)
-	if err != nil {
+func doRestoration(ctx *executor.ExecuteContext, ae executor.AvoidanceExecutorStruct) error {
+
+	//step1 do BlockScheduled action
+	if err := ae.BlockScheduledExecutor.Restore(ctx); err != nil {
 		return err
 	}
 
-	clogs.Log().V(6).Info(fmt.Sprintf("node condition %+v", node.Status.Conditions))
-
-	// step2 update node condition for block scheduled
-	if bsa.BlockScheduledQOSPriority != nil {
-		// einformer.updateNodeConditions
-		// einformer.updateNodeStatus
+	//step2 do Evict action
+	if err := ae.EvictExecutor.Restore(ctx); err != nil {
+		return err
 	}
 
-	// step2 update node condition for restored scheduled
-	if bsa.RestoreScheduledQOSPriority != nil {
-		// einformer.updateNodeConditions
-		// einformer.updateNodeStatus
+	//step3 do Throttle action
+	if err := ae.ThrottleExecutor.Restore(ctx); err != nil {
+		return err
 	}
 
-	return nil
-}
-
-func (a *AvoidanceManager) evictAction(ea []analyzer.EvictActionStruct, stop <-chan struct{}) error {
-	var bSucceed bool
-
-	for _, e := range ea {
-		for _, podNamespace := range e.EvictPods {
-			pod, err := einformer.GetPodFromInformer(a.podInformer, podNamespace.String())
-			if err != nil {
-				bSucceed = false
-				continue
-			}
-			clogs.Log().V(5).Info("pod %+v", pod)
-			//go einformer.EvictPodWithGracePeriod(a.client,pod,einformer.GetGracePeriodSeconds(e.DeletionGracePeriodSeconds))
-		}
-	}
-
-	if !bSucceed {
-		return fmt.Errorf("some pod evict failed")
-	}
-
-	return nil
-}
-
-func (a *AvoidanceManager) throttleAction(tas []analyzer.ThrottleActionStruct, stop <-chan struct{}) error {
 	return nil
 }

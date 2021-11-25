@@ -3,6 +3,7 @@ package analyzer
 import (
 	ensuranceapi "github.com/gocrane-io/api/ensurance/v1alpha1"
 	ecache "github.com/gocrane-io/crane/pkg/ensurance/cache"
+	"github.com/gocrane-io/crane/pkg/ensurance/executor"
 	"github.com/gocrane-io/crane/pkg/ensurance/opamock"
 	"github.com/gocrane-io/crane/pkg/utils/clogs"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,16 +17,16 @@ type AnalyzerManager struct {
 	nodeInformer      cache.SharedIndexInformer
 	nepInformer       cache.SharedIndexInformer
 	avoidanceInformer cache.SharedIndexInformer
-	noticeCh          chan<- AvoidanceActionStruct
+	noticeCh          chan<- executor.AvoidanceExecutorStruct
 
 	NodeStatus sync.Map
 	dcsOlder   []ecache.DetectionCondition
-	acsOlder   AvoidanceActionStruct
+	acsOlder   executor.AvoidanceExecutorStruct
 }
 
 // AnalyzerManager create analyzer manager
 func NewAnalyzerManager(podInformer cache.SharedIndexInformer, nodeInformer cache.SharedIndexInformer, nepInformer cache.SharedIndexInformer,
-	avoidanceInformer cache.SharedIndexInformer, noticeCh chan<- AvoidanceActionStruct) Analyzer {
+	avoidanceInformer cache.SharedIndexInformer, noticeCh chan<- executor.AvoidanceExecutorStruct) Analyzer {
 	return &AnalyzerManager{
 		noticeCh:          noticeCh,
 		podInformer:       podInformer,
@@ -112,12 +113,12 @@ func (s *AnalyzerManager) doAnalyze(object ensuranceapi.ObjectiveEnsurance) (eca
 	return ecache.DetectionCondition{}, nil
 }
 
-func (s *AnalyzerManager) doMerge(dcs []ecache.DetectionCondition) (AvoidanceActionStruct, error) {
+func (s *AnalyzerManager) doMerge(dcs []ecache.DetectionCondition) (executor.AvoidanceExecutorStruct, error) {
 	//step1 filter the only dryRun detection
 	//step2 do BlockScheduled merge
 	//step3 do Throttle merge FilterAndSortThrottlePods
 	//step4 do Evict merge  FilterAndSortEvictPods
-	return AvoidanceActionStruct{}, nil
+	return executor.AvoidanceExecutorStruct{}, nil
 }
 
 func (a *AnalyzerManager) doLogEvent(dcs []ecache.DetectionCondition) {
@@ -131,7 +132,7 @@ func (s *AnalyzerManager) getMetricFromMap(metricName string, selector *metav1.L
 	return 0.0, nil
 }
 
-func (s *AnalyzerManager) noticeAvoidanceManager(as AvoidanceActionStruct) {
+func (s *AnalyzerManager) noticeAvoidanceManager(as executor.AvoidanceExecutorStruct) {
 	//step1: check need to notice avoidance manager
 
 	//step2: notice by channel

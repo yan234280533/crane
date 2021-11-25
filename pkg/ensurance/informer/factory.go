@@ -29,6 +29,8 @@ type Context struct {
 	kubeConfig string
 	// nodeName for filter, if nodeName is empty not to filer
 	nodeName string
+	// stop channel
+	stop chan struct{}
 	// kubernetes client to communication with kubernetes api-server
 	kubeClient clientset.Interface
 	// ensurance client
@@ -62,6 +64,7 @@ func (c *Context) ContextInit() error {
 }
 
 func NewContextInitWithClient(client clientset.Interface, ensuranceClient ensuaranceset.Interface, nodeName string) *Context {
+
 	var fieldPodSelector string
 	if nodeName != "" {
 		fieldPodSelector = fields.AndSelectors(fields.OneTermEqualSelector(specNodeNameField, nodeName),
@@ -90,7 +93,9 @@ func NewContextInitWithClient(client clientset.Interface, ensuranceClient ensuar
 	var avoidanceFactory = externalversions.NewSharedInformerFactory(ensuranceClient, informerSyncPeriod)
 	var nepFactory = externalversions.NewSharedInformerFactory(ensuranceClient, informerSyncPeriod)
 
-	return &Context{kubeClient: client, ensuranceClient: ensuranceClient, nodeName: nodeName, podFactory: podFactory,
+	stopChannel := make(chan struct{})
+
+	return &Context{kubeClient: client, stop: stopChannel, ensuranceClient: ensuranceClient, nodeName: nodeName, podFactory: podFactory,
 		nodeFactory: nodeFactory, avoidanceFactory: avoidanceFactory, nepFactory: nepFactory}
 }
 
@@ -114,25 +119,29 @@ func (c *Context) GetAvoidanceFactory() externalversions.SharedInformerFactory {
 	return c.avoidanceFactory
 }
 
+func (c *Context) GetStopChannel() chan struct{} {
+	return c.stop
+}
+
 // Run starts k8s informers
-func (c *Context) Run(stop <-chan struct{}) {
+func (c *Context) Run() {
 	if c.podFactory != nil {
-		c.podFactory.Start(stop)
-		c.podFactory.WaitForCacheSync(stop)
+		c.podFactory.Start(c.stop)
+		c.podFactory.WaitForCacheSync(c.stop)
 	}
 
 	if c.nodeFactory != nil {
-		c.nodeFactory.Start(stop)
-		c.nodeFactory.WaitForCacheSync(stop)
+		c.nodeFactory.Start(c.stop)
+		c.nodeFactory.WaitForCacheSync(c.stop)
 	}
 
 	if c.avoidanceFactory != nil {
-		c.avoidanceFactory.Start(stop)
-		c.avoidanceFactory.WaitForCacheSync(stop)
+		c.avoidanceFactory.Start(c.stop)
+		c.avoidanceFactory.WaitForCacheSync(c.stop)
 	}
 
 	if c.nepFactory != nil {
-		c.nepFactory.Start(stop)
-		c.nepFactory.WaitForCacheSync(stop)
+		c.nepFactory.Start(c.stop)
+		c.nepFactory.WaitForCacheSync(c.stop)
 	}
 }
