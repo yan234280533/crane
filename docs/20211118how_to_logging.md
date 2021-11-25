@@ -42,7 +42,7 @@ import (
 )
 
 func A() {
-   clogs.Log().Info("run manager")
+   clogs.Log().V(2).Info("run manager")
    clogs.Log().Error(err, "opts validate failed")
 }
 
@@ -81,5 +81,5 @@ then in the controller logics to use the log like this(p is the ptr of the contr
 
 we can use `GenerateKey` to print the info of resource object, like this:
 ```
-clogs.Log().Info("object %s is updated successfully", clogs.GenerateKey(object.Name, object.Namespace))
+clogs.Log().V(2).Info("object %s is updated successfully", clogs.GenerateKey(object.Name, object.Namespace))
 ```

@@ -86,7 +86,7 @@ func Run(ctx context.Context, opts *options.Options) error {
 
 	initializationControllers(mgr, opts)
 
-	clogs.Log().Info("Starting crane manager")
+	clogs.Log().V(1).Info("Starting crane manager")
 	if err := mgr.Start(ctx); err != nil {
 		clogs.Log().Error(err, "problem running crane manager")
 		return err
@@ -97,7 +97,7 @@ func Run(ctx context.Context, opts *options.Options) error {
 
 // initializationControllers setup controllers with manager
 func initializationControllers(mgr ctrl.Manager, opts *options.Options) {
-	clogs.Log().Info(fmt.Sprintf("opts %v", opts))
+	clogs.Log().V(1).Info(fmt.Sprintf("opts %v", opts))
 	hpaRecorder := mgr.GetEventRecorderFor("advanced-hpa-controller")
 	if err := (&hpa.AdvancedHPAController{
 		Client:     mgr.GetClient(),
