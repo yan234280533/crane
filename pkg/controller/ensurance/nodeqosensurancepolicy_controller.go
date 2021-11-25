@@ -74,6 +74,12 @@ func (c *NodeQOSEnsurancePolicyController) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{Requeue: true}, err
 	}
 
+	if !nep.DeletionTimestamp.IsZero() {
+		if err := c.delete(nep); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
 	return c.reconcileNep(nep)
 }
 
@@ -120,6 +126,24 @@ func (c *NodeQOSEnsurancePolicyController) update(nep *ensuranceapi.NodeQOSEnsur
 		clogs.Log().V(6).Info("nepOld %v", nepOld)
 	}
 	return fmt.Errorf("update nep(%s),no found", nep.Name)
+}
+
+func (c *NodeQOSEnsurancePolicyController) delete(nep *ensuranceapi.NodeQOSEnsurancePolicy) error {
+	// step1: delete metrics from cache nep
+	if nepOld, ok := c.Cache.Get(nep.Name); ok {
+		for _, v := range nepOld.Nep.Spec.ObjectiveEnsurance {
+			var key = GenerateEnsuranceQosNodePolicyKey(nep.Name, v.AvoidanceActionName)
+			c.StateStore.DeleteMetric(key)
+		}
+	}
+
+	// step2: delete metrics from  nep
+	for _, v := range nep.Spec.ObjectiveEnsurance {
+		var key = GenerateEnsuranceQosNodePolicyKey(nep.Name, v.AvoidanceActionName)
+		c.StateStore.DeleteMetric(key)
+	}
+
+	return nil
 }
 
 func GenerateEnsuranceQosNodePolicyKey(policyName string, avoidanceActionName string) string {
