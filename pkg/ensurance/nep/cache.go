@@ -4,15 +4,11 @@ import (
 	"sync"
 
 	ensuranceapi "github.com/gocrane-io/api/ensurance/v1alpha1"
-	"github.com/gocrane-io/crane/pkg/dsmock"
 )
 
 type CachedNodeQOSEnsurancePolicy struct {
 	// The cached object of the nodeQOSEnsurancePolicy
-	Nep                *ensuranceapi.NodeQOSEnsurancePolicy
-	NeedStartDetection bool
-	Channel            chan struct{}
-	Ds                 *dsmock.DataSource
+	Nep *ensuranceapi.NodeQOSEnsurancePolicy
 }
 
 type NodeQOSEnsurancePolicyCache struct {
@@ -32,29 +28,19 @@ func (s *NodeQOSEnsurancePolicyCache) ListKeys() []string {
 	return keys
 }
 
-// GetByKey returns the value stored in the nepMap under the given key
-func (s *NodeQOSEnsurancePolicyCache) GetByKey(key string) (interface{}, bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if v, ok := s.nepMap[key]; ok {
-		return v, true, nil
-	}
-	return nil, false, nil
-}
-
 // ListKeys implements the interface required by DeltaFIFO to list the keys we
 // already know about.
-func (s *NodeQOSEnsurancePolicyCache) allClusters() []*ensuranceapi.NodeQOSEnsurancePolicy {
+func (s *NodeQOSEnsurancePolicyCache) allNeps() []*ensuranceapi.NodeQOSEnsurancePolicy {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	neps := make([]*ensuranceapi.NodeQOSEnsurancePolicy, 0, len(s.nepMap))
 	for _, v := range s.nepMap {
-		neps = append(neps, v.nep)
+		neps = append(neps, v.Nep)
 	}
 	return neps
 }
 
-func (s *NodeQOSEnsurancePolicyCache) get(name string) (*CachedNodeQOSEnsurancePolicy, bool) {
+func (s *NodeQOSEnsurancePolicyCache) Get(name string) (*CachedNodeQOSEnsurancePolicy, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	nep, ok := s.nepMap[name]
@@ -73,20 +59,18 @@ func (s *NodeQOSEnsurancePolicyCache) GetOrCreate(nep *ensuranceapi.NodeQOSEnsur
 	defer s.mu.Unlock()
 	cacheNep, ok := s.nepMap[nep.Name]
 	if !ok {
-		ch := make(chan struct{})
-		cacheNep = &CachedNodeQOSEnsurancePolicy{NeedStartDetection: true, Nep: nep, Channel: ch}
-		s.nepMap[nep.Name] = cacheNep
+		s.nepMap[nep.Name] = &CachedNodeQOSEnsurancePolicy{Nep: nep}
 	}
 	return cacheNep
 }
 
-func (s *NodeQOSEnsurancePolicyCache) set(name string, nep *CachedNodeQOSEnsurancePolicy) {
+func (s *NodeQOSEnsurancePolicyCache) Set(nep *ensuranceapi.NodeQOSEnsurancePolicy) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.nepMap[name] = nep
+	s.nepMap[nep.Name] = &CachedNodeQOSEnsurancePolicy{Nep: nep}
 }
 
-func (s *NodeQOSEnsurancePolicyCache) delete(name string) {
+func (s *NodeQOSEnsurancePolicyCache) Delete(name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.nepMap, name)

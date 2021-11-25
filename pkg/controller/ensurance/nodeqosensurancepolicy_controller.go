@@ -18,14 +18,15 @@ package controllers
 
 import (
 	"context"
-	"time"
-
+	"fmt"
 	"github.com/gocrane-io/crane/pkg/dsmock"
 	"github.com/gocrane-io/crane/pkg/ensurance/opamock"
+	"github.com/gocrane-io/crane/pkg/ensurance/statestore"
+	"github.com/gocrane-io/crane/pkg/utils/clogs"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/record"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,19 +34,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ensuranceapi "github.com/gocrane-io/api/ensurance/v1alpha1"
-	"github.com/gocrane-io/crane/pkg/ensurance/cache"
 	"github.com/gocrane-io/crane/pkg/ensurance/nep"
 )
 
 // NodeQOSEnsurancePolicyController reconciles a NodeQOSEnsurancePolicy object
 type NodeQOSEnsurancePolicyController struct {
 	client.Client
-	Scheme         *runtime.Scheme
-	Log            logr.Logger
-	RestMapper     meta.RESTMapper
-	Recorder       record.EventRecorder
-	Cache          *nep.NodeQOSEnsurancePolicyCache
-	DetectionCache *cache.DetectionConditionCache
+	Scheme     *runtime.Scheme
+	Log        logr.Logger
+	RestMapper meta.RESTMapper
+	Recorder   record.EventRecorder
+	Cache      *nep.NodeQOSEnsurancePolicyCache
+	StateStore statestore.StateStore
 }
 
 //+kubebuilder:rbac:groups=ensurance.crane.io.crane.io,resources=nodeqosensurancepolicies,verbs=get;list;watch;create;update;patch;delete
@@ -85,71 +85,43 @@ func (c *NodeQOSEnsurancePolicyController) SetupWithManager(mgr ctrl.Manager) er
 }
 
 func (c *NodeQOSEnsurancePolicyController) reconcileNep(nep *ensuranceapi.NodeQOSEnsurancePolicy) (ctrl.Result, error) {
-	var cachedNep = c.Cache.GetOrCreate(nep)
 
-	if cachedNep.NeedStartDetection {
-		ds, err := dsmock.GetDataSourceFromNodeProbes(nep.Spec.NodeQualityProbe)
-		if err != nil {
+	if !c.Cache.Exist(nep.Name) {
+		if err := c.create(nep); err != nil {
 			return ctrl.Result{}, err
 		}
-
-		cachedNep.Ds = ds
-
-		if err := c.startDetection(cachedNep); err != nil {
+		c.Cache.Set(nep)
+	} else {
+		if err := c.update(nep); err != nil {
 			return ctrl.Result{}, err
 		}
-		cachedNep.NeedStartDetection = false
+		c.Cache.Set(nep)
 	}
 
 	return ctrl.Result{}, nil
 }
 
-func (c *NodeQOSEnsurancePolicyController) startDetection(cachedNep *nep.CachedNodeQOSEnsurancePolicy) error {
-
-	for _, v := range cachedNep.Nep.Spec.ObjectiveEnsurance {
-		var detection = cache.DetectionCondition{PolicyName: cachedNep.Nep.Name, Namespace: cachedNep.Nep.Namespace, ObjectiveEnsuranceName: v.AvoidanceActionName}
-		go wait.PollImmediateUntil(time.Duration(int64(cachedNep.Nep.Spec.NodeQualityProbe.PeriodSeconds))*time.Second, doDetection(cachedNep.Ds, c.DetectionCache, v, detection), cachedNep.Channel)
+func (c *NodeQOSEnsurancePolicyController) create(nep *ensuranceapi.NodeQOSEnsurancePolicy) error {
+	// step1: add metrics
+	for _, v := range nep.Spec.ObjectiveEnsurance {
+		var key = GenerateEnsuranceQosNodePolicyKey(nep.Name, v.AvoidanceActionName)
+		c.StateStore.AddMetric(key, v.MetricRule.Metric.Name, v.MetricRule.Metric.Selector)
 	}
-
 	return nil
 }
 
-func doDetection(ds *dsmock.DataSource, dCache *cache.DetectionConditionCache, object ensuranceapi.ObjectiveEnsurance, detection cache.DetectionCondition) func() (bool, error) {
-
-	return func() (bool, error) {
-		//step1: get metrics
-		value, err := ds.LatestTimeSeries(object.MetricRule.Metric.Name, object.MetricRule.Metric.Selector)
-		if err != nil {
-			return false, err
-		}
-
-		//step2: use opa to check if reached
-		opamock.OpaEval(object.MetricRule.Metric.Name, float64(object.MetricRule.Target.Value.Value()), value)
-
-		//step3: check is reached action or restored, set the detection
-
-		//step4: update the cache
-		UpdateDetectionIfNeed(dCache, detection)
-
-		return true, nil
+func (c *NodeQOSEnsurancePolicyController) update(nep *ensuranceapi.NodeQOSEnsurancePolicy) error {
+	if nepOld, ok := c.Cache.Get(nep.Name); ok {
+		// step1 compare all objectiveEnsurance
+		// step2 if eth1 objectiveEnsurance metric changed, update the policy status
+		// step3 delete the old metric and add the new metric
+		// step4 if failed, delete all metrics for this policy
+		// step5 if succeed, update the policy status
+		clogs.Log().V(6).Info("nepOld %v", nepOld)
 	}
+	return fmt.Errorf("update nep(%s),no found", nep.Name)
 }
 
-func UpdateDetectionIfNeed(dCache *cache.DetectionConditionCache, detection cache.DetectionCondition) error {
-	// step1: get detection object from cache
-	detectionOld, ok := dCache.Get(cache.GenerateDetectionKey(detection))
-	if !ok {
-		dCache.Set(detection)
-		return nil
-	}
-
-	// it has no changed, skip update
-	if (detection.Triggered == detectionOld.Triggered) && (detection.Restored == detectionOld.Restored) {
-		return nil
-	}
-
-	//update the detection
-	dCache.Set(detection)
-
-	return nil
+func GenerateEnsuranceQosNodePolicyKey(policyName string, avoidanceActionName string) string {
+	return strings.Join([]string{"node", policyName, avoidanceActionName}, ".")
 }

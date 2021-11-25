@@ -7,18 +7,13 @@ import (
 	"github.com/gocrane-io/crane/pkg/ensurance/analyzer"
 	"github.com/gocrane-io/crane/pkg/ensurance/avoidance"
 	"github.com/gocrane-io/crane/pkg/ensurance/cache"
-	"github.com/golang/glog"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/kubernetes"
-	"os"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"time"
-
+	"github.com/gocrane-io/crane/pkg/ensurance/statestore"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	kubeinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"os"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
@@ -109,19 +104,6 @@ func initializationControllers(mgr ctrl.Manager, opts *options.Options) {
 
 	var nodeDetectionCache = cache.DetectionConditionCache{}
 
-	if err := (&ensurancecontroller.NodeQOSEnsurancePolicyController{
-		Client:         mgr.GetClient(),
-		Log:            clogs.Log().WithName("node-qos-controller"),
-		Scheme:         mgr.GetScheme(),
-		RestMapper:     mgr.GetRESTMapper(),
-		Recorder:       nepRecorder,
-		Cache:          &nep.NodeQOSEnsurancePolicyCache{},
-		DetectionCache: &nodeDetectionCache,
-	}).SetupWithManager(mgr); err != nil {
-		clogs.Log().Error(err, "unable to create controller", "controller", "NodeQOSEnsurancePolicyController")
-		os.Exit(1)
-	}
-
 	//New avoidance manager
 	generatedClient := kubernetes.NewForConfigOrDie(mgr.GetConfig())
 	clientSet := ensuaranceset.NewForConfigOrDie(mgr.GetConfig())
@@ -129,19 +111,35 @@ func initializationControllers(mgr ctrl.Manager, opts *options.Options) {
 	ctx := einformer.NewContextInitWithClient(generatedClient, clientSet, opts.HostnameOverride)
 	podInformer := ctx.GetPodFactory().Core().V1().Pods().Informer()
 	nodeInformer := ctx.GetNodeFactory().Core().V1().Nodes().Informer()
-	avoidanceInformer := ctx.GetAvoidanceFactory().Ensurance().V1alpha1().AvoidanceActions().Informer()
 	nepInformer := ctx.GetAvoidanceFactory().Ensurance().V1alpha1().NodeQOSEnsurancePolicies().Informer()
+	avoidanceInformer := ctx.GetAvoidanceFactory().Ensurance().V1alpha1().AvoidanceActions().Informer()
 
 	stopChannel := make(chan struct{})
 	ctx.Run(stopChannel)
 
+	stateStoreManager := statestore.NewStateStoreManager()
+	stateStoreManager.Run(stopChannel)
+
 	var noticeCh = make(chan analyzer.AvoidanceActionStruct)
 
-	avoidanceManager := avoidance.NewAvoidanceManager(podInformer, nodeInformer, avoidanceInformer)
+	avoidanceManager := avoidance.NewAvoidanceManager(generatedClient, opts.HostnameOverride, podInformer, nodeInformer, avoidanceInformer, noticeCh)
 	avoidanceManager.Run(stopChannel)
 
-	analyzerManager := analyzer.NewAnalyzerManager(podInformer, nodeInformer, nepInformer)
+	analyzerManager := analyzer.NewAnalyzerManager(podInformer, nodeInformer, avoidanceInformer, nepInformer, noticeCh)
 	analyzerManager.Run(stopChannel)
+
+	if err := (&ensurancecontroller.NodeQOSEnsurancePolicyController{
+		Client:     mgr.GetClient(),
+		Log:        clogs.Log().WithName("node-qos-controller"),
+		Scheme:     mgr.GetScheme(),
+		RestMapper: mgr.GetRESTMapper(),
+		Recorder:   nepRecorder,
+		Cache:      &nep.NodeQOSEnsurancePolicyCache{},
+		Statestore: stateStoreManager,
+	}).SetupWithManager(mgr); err != nil {
+		clogs.Log().Error(err, "unable to create controller", "controller", "NodeQOSEnsurancePolicyController")
+		os.Exit(1)
+	}
 
 	return
 }
