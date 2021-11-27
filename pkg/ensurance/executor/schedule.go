@@ -1,6 +1,11 @@
 package executor
 
-import v1 "k8s.io/api/core/v1"
+import (
+	v1 "k8s.io/api/core/v1"
+
+	einformer "github.com/gocrane-io/crane/pkg/ensurance/informer"
+	"github.com/gocrane-io/crane/pkg/utils/clogs"
+)
 
 type BlockScheduledExecutor struct {
 	BlockScheduledQOSPriority   *ScheduledQOSPriority
@@ -13,19 +18,45 @@ type ScheduledQOSPriority struct {
 }
 
 func (b *BlockScheduledExecutor) Avoid(ctx *ExecuteContext) error {
-	// update node condition for block scheduled
-	if b.BlockScheduledQOSPriority != nil {
-		// einformer.updateNodeConditions
-		// einformer.updateNodeStatus
+	clogs.Log().V(6).Info("Avoid", *b)
+
+	if b.BlockScheduledQOSPriority == nil {
+		return nil
 	}
+
+	node, err := einformer.GetNodeFromInformer(ctx.NodeInformer, ctx.NodeName)
+	if err != nil {
+		return err
+	}
+
+	// update node condition for block scheduled
+	if updateNode, needUpdate := einformer.UpdateNodeConditions(node, v1.NodeCondition{Type: einformer.NodeUnscheduledLow, Status: v1.ConditionTrue}); needUpdate {
+		if err := einformer.UpdateNodeStatus(ctx.Client, updateNode, nil); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
 func (b *BlockScheduledExecutor) Restore(ctx *ExecuteContext) error {
-	// update node condition for restored scheduled
-	if b.RestoreScheduledQOSPriority != nil {
-		// einformer.updateNodeConditions
-		// einformer.updateNodeStatus
+	clogs.Log().V(6).Info("Restore", *b)
+
+	if b.RestoreScheduledQOSPriority == nil {
+		return nil
 	}
+
+	node, err := einformer.GetNodeFromInformer(ctx.NodeInformer, ctx.NodeName)
+	if err != nil {
+		return err
+	}
+
+	// update node condition for restored scheduled
+	if updateNode, needUpdate := einformer.UpdateNodeConditions(node, v1.NodeCondition{Type: einformer.NodeUnscheduledLow, Status: v1.ConditionFalse}); needUpdate {
+		if err := einformer.UpdateNodeStatus(ctx.Client, updateNode, nil); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }

@@ -16,6 +16,10 @@ type NodeQOSEnsurancePolicyCache struct {
 	nepMap map[string]*CachedNodeQOSEnsurancePolicy
 }
 
+func (s *NodeQOSEnsurancePolicyCache) Init() {
+	s.nepMap = make(map[string]*CachedNodeQOSEnsurancePolicy)
+}
+
 // ListKeys implements the interface required by DeltaFIFO to list the keys we
 // already know about.
 func (s *NodeQOSEnsurancePolicyCache) ListKeys() []string {

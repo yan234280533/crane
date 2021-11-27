@@ -25,9 +25,9 @@ rules:
       - update
       - patch
   - apiGroups:
-      - ""
+      - "ensurance.crane.io"
     resources:
-      - nodeqosensurancepolicies.ensurance.crane.io
+      - nodeqosensurancepolicies
     verbs:
       - get
       - list
@@ -35,9 +35,19 @@ rules:
       - update
       - patch
   - apiGroups:
-      - ""
+      - "ensurance.crane.io"
     resources:
-      - podqosensurancepolicies.ensurance.crane.io
+      - podqosensurancepolicies
+    verbs:
+      - get
+      - list
+      - watch
+      - update
+      - patch
+  - apiGroups:
+      - "ensurance.crane.io"
+    resources:
+      - avoidanceactions
     verbs:
       - get
       - list

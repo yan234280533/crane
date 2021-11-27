@@ -9,40 +9,35 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/gocrane-io/crane/pkg/utils"
 )
 
 const (
 	NodeUnscheduledLow v1.NodeConditionType = "NodeUnscheduledLow"
 )
 
-// updateNodeConditions be used to update node condition
-func updateNodeConditions(node *v1.Node, condition v1.NodeCondition) (*v1.Node, error) {
-	if node == nil {
-		return nil, fmt.Errorf("updateNodeConditions node is empty")
-	}
+// UpdateNodeConditions be used to update node condition with check whether it needs to update
+func UpdateNodeConditions(node *v1.Node, condition v1.NodeCondition) (*v1.Node, bool) {
 
 	updatedNode := node.DeepCopy()
 
-	conditions, err := GetNodeConditions(updatedNode)
-	if err != nil {
-		return nil, err
-	}
-
-	var bFound = false
-	for i, cond := range conditions {
+	// loop and found the condition type
+	for i, cond := range updatedNode.Status.Conditions {
 		if cond.Type == condition.Type {
-			conditions[i] = condition
-			bFound = true
+
+			if cond.Status == condition.Status {
+				return updatedNode, false
+			} else {
+				updatedNode.Status.Conditions[i] = condition
+				return updatedNode, true
+			}
 		}
 	}
 
-	if !bFound {
-		conditions = append(conditions, condition)
-	}
-
-	updatedNode.Status.Conditions = conditions
-
-	return updatedNode, nil
+	// not found the condition, to add the condition to the end
+	updatedNode.Status.Conditions = append(updatedNode.Status.Conditions, condition)
+	return updatedNode, true
 }
 
 // updateNodeTaints be used to update node taint
@@ -75,15 +70,6 @@ func updateNodeTaints(node *v1.Node, taint v1.Taint) (*v1.Node, error) {
 	return updatedNode, nil
 }
 
-func GetNodeConditions(node *v1.Node) ([]v1.NodeCondition, error) {
-
-	if node == nil {
-		return []v1.NodeCondition{}, fmt.Errorf("node resource is empty")
-	}
-
-	return node.Status.Conditions, nil
-}
-
 func GetNodeTaints(node *v1.Node) ([]v1.Taint, error) {
 
 	if node == nil {
@@ -103,10 +89,10 @@ func FilterNodeConditionByType(conditions []v1.NodeCondition, conditionType stri
 	return v1.NodeCondition{}, fmt.Errorf("condition %s is not found", conditionType)
 }
 
-// updateNodeStatus be used to update node status by communication with api-server
-func updateNodeStatus(client clientset.Interface, updateNode *v1.Node, retry *uint64) error {
+// UpdateNodeStatus be used to update node status by communication with api-server
+func UpdateNodeStatus(client clientset.Interface, updateNode *v1.Node, retry *uint64) error {
 
-	for i := uint64(0); i < getRetryTimes(retry); i++ {
+	for i := uint64(0); i < utils.GetUint64withDefault(retry, defaultRetryTimes); i++ {
 		_, err := client.CoreV1().Nodes().UpdateStatus(context.Background(), updateNode, metav1.UpdateOptions{})
 		if err != nil {
 			if errors.IsConflict(err) {
@@ -124,8 +110,8 @@ func updateNodeStatus(client clientset.Interface, updateNode *v1.Node, retry *ui
 }
 
 // updateNode be used to update node  by communication with api-server
-func updateNode(client clientset.Interface, updateNode *v1.Node, retry *uint64) error {
-	for i := uint64(0); i < getRetryTimes(retry); i++ {
+func UpdateNode(client clientset.Interface, updateNode *v1.Node, retry *uint64) error {
+	for i := uint64(0); i < utils.GetUint64withDefault(retry, defaultRetryTimes); i++ {
 		_, err := client.CoreV1().Nodes().Update(context.Background(), updateNode, metav1.UpdateOptions{})
 		if err != nil {
 			if errors.IsConflict(err) {
@@ -139,13 +125,6 @@ func updateNode(client clientset.Interface, updateNode *v1.Node, retry *uint64) 
 	}
 
 	return fmt.Errorf("update node failed, conflict too more times")
-}
-
-func getRetryTimes(retry *uint64) uint64 {
-	if retry == nil {
-		return defaultRetryTimes
-	}
-	return *retry
 }
 
 func GetNodeFromInformer(nodeInformer cache.SharedIndexInformer, nodeName string) (*v1.Node, error) {

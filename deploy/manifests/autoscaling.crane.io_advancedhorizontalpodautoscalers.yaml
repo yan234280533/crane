@@ -13,10 +13,38 @@ spec:
     kind: AdvancedHorizontalPodAutoscaler
     listKind: AdvancedHorizontalPodAutoscalerList
     plural: advancedhorizontalpodautoscalers
+    shortNames:
+    - ahpa
     singular: advancedhorizontalpodautoscaler
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: The scale strategy of ahpa.
+      jsonPath: .spec.scaleStrategy
+      name: STRATEGY
+      type: string
+    - description: The min replicas of target workload.
+      jsonPath: .spec.minReplicas
+      name: MINPODS
+      type: integer
+    - description: The max replicas of target workload.
+      jsonPath: .spec.maxReplicas
+      name: MAXPODS
+      type: integer
+    - description: The specific replicas of target workload.
+      jsonPath: .spec.scaleStrategy
+      name: SPECIFICPODS
+      type: integer
+    - description: The desired replicas of target workload.
+      jsonPath: .status.desiredReplicas
+      name: REPLICAS
+      type: integer
+    - description: CreationTimestamp is a timestamp representing the server time when
+        this object was created.
+      jsonPath: .metadata.creationTimestamp
+      name: AGE
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: AdvancedHorizontalPodAutoscaler is the Schema for the advancedhorizontalpodautoscaler
@@ -712,12 +740,20 @@ spec:
                         type: object
                     type: object
                   predictionWindow:
-                    default: 600
+                    default: 3600
                     description: PredictionWindow is the time window seconds to predict
                       metrics in the future.
                     format: int32
                     type: integer
                 type: object
+              scaleStrategy:
+                default: Auto
+                description: ScaleStrategy indicate the strategy to scaling target,
+                  value can be "Auto" and "Manual" the default ScaleStrategy is Auto.
+                enum:
+                - Auto
+                - Manual
+                type: string
               scaleTargetRef:
                 description: ScaleTargetRef is the reference to the workload that
                   should be scaled.
@@ -735,6 +771,12 @@ spec:
                 - kind
                 - name
                 type: object
+              specificReplicas:
+                description: SpecificReplicas specify the target replicas if ScaleStrategy
+                  is Manual If not set, when ScaleStrategy is setting to Manual, it
+                  will just stop scaling
+                format: int32
+                type: integer
             required:
             - maxReplicas
             - scaleTargetRef
@@ -828,6 +870,8 @@ spec:
         type: object
     served: true
     storage: true
+    subresources:
+      status: {}
 status:
   acceptedNames:
     kind: ""

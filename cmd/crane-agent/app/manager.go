@@ -98,7 +98,7 @@ func Run(ctx context.Context, opts *options.Options) error {
 
 	// start managers
 	for _, v := range components {
-		clogs.Log().V(2).Info("Starting manager %s", v.Name())
+		clogs.Log().V(2).Info(fmt.Sprintf("Starting manager %s", v.Name()))
 		v.Run(ec.GetStopChannel())
 	}
 
@@ -120,16 +120,18 @@ func initializationComponents(mgr ctrl.Manager, opts *options.Options, ec *einfo
 	nepInformer := ec.GetAvoidanceFactory().Ensurance().V1alpha1().NodeQOSEnsurancePolicies().Informer()
 	avoidanceInformer := ec.GetAvoidanceFactory().Ensurance().V1alpha1().AvoidanceActions().Informer()
 
+	var noticeCh = make(chan executor.AvoidanceExecutor)
+
 	// init state store manager
-	stateStoreManager := statestore.NewStateStoreManager()
+	stateStoreManager := statestore.NewStateStoreManager(nepInformer)
 	managers = append(managers, stateStoreManager)
 
 	// init analyzer manager
-	analyzerManager := analyzer.NewAnalyzerManager(podInformer, nodeInformer, avoidanceInformer, nepInformer, noticeCh)
+	analyzerRecorder := mgr.GetEventRecorderFor("analyzer")
+	analyzerManager := analyzer.NewAnalyzerManager(podInformer, nodeInformer, avoidanceInformer, nepInformer, analyzerRecorder, noticeCh)
 	managers = append(managers, analyzerManager)
 
 	// init avoidance manager
-	var noticeCh = make(chan executor.AvoidanceExecutorStruct)
 	avoidanceManager := avoidance.NewAvoidanceManager(ec.GetKubeClient(), opts.HostnameOverride, podInformer, nodeInformer, avoidanceInformer, noticeCh)
 	managers = append(managers, avoidanceManager)
 
