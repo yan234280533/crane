@@ -120,8 +120,10 @@ func initializationComponents(mgr ctrl.Manager, opts *options.Options, ec *einfo
 	nepInformer := ec.GetAvoidanceFactory().Ensurance().V1alpha1().NodeQOSEnsurancePolicies().Informer()
 	avoidanceInformer := ec.GetAvoidanceFactory().Ensurance().V1alpha1().AvoidanceActions().Informer()
 
+	var noticeCh = make(chan executor.AvoidanceExecutorStruct)
+
 	// init state store manager
-	stateStoreManager := statestore.NewStateStoreManager()
+	stateStoreManager := statestore.NewStateStoreManager(nepInformer)
 	managers = append(managers, stateStoreManager)
 
 	// init analyzer manager
@@ -129,7 +131,6 @@ func initializationComponents(mgr ctrl.Manager, opts *options.Options, ec *einfo
 	managers = append(managers, analyzerManager)
 
 	// init avoidance manager
-	var noticeCh = make(chan executor.AvoidanceExecutorStruct)
 	avoidanceManager := avoidance.NewAvoidanceManager(ec.GetKubeClient(), opts.HostnameOverride, podInformer, nodeInformer, avoidanceInformer, noticeCh)
 	managers = append(managers, avoidanceManager)
 

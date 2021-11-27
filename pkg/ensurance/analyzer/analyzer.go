@@ -1,9 +1,10 @@
 package analyzer
 
 import (
-	"github.com/gocrane-io/crane/pkg/ensurance/logic"
 	"sync"
 	"time"
+
+	"github.com/gocrane-io/crane/pkg/ensurance/logic"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"

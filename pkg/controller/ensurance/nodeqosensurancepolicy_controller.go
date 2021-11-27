@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"github.com/gocrane-io/crane/pkg/ensurance/statestore/types"
 	"strings"
 
 	"github.com/gocrane-io/crane/pkg/ensurance/statestore"
@@ -32,8 +33,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	ensuranceapi "github.com/gocrane/api/ensurance/v1alpha1"
 	"github.com/gocrane-io/crane/pkg/ensurance/nep"
+	ensuranceapi "github.com/gocrane/api/ensurance/v1alpha1"
 )
 
 // NodeQOSEnsurancePolicyController reconciles a NodeQOSEnsurancePolicy object
@@ -110,7 +111,7 @@ func (c *NodeQOSEnsurancePolicyController) create(nep *ensuranceapi.NodeQOSEnsur
 	// step1: add metrics
 	for _, v := range nep.Spec.ObjectiveEnsurance {
 		var key = GenerateEnsuranceQosNodePolicyKey(nep.Name, v.AvoidanceActionName)
-		c.StateStore.AddMetric(key, v.MetricRule.Metric.Name, v.MetricRule.Metric.Selector)
+		c.StateStore.AddMetric(key, types.NodeLocalCollectorType, v.MetricRule.Metric.Name, v.MetricRule.Metric.Selector)
 	}
 	return nil
 }
@@ -118,7 +119,7 @@ func (c *NodeQOSEnsurancePolicyController) create(nep *ensuranceapi.NodeQOSEnsur
 func (c *NodeQOSEnsurancePolicyController) update(nep *ensuranceapi.NodeQOSEnsurancePolicy) error {
 	if nepOld, ok := c.Cache.Get(nep.Name); ok {
 		// step1 compare all objectiveEnsurance
-		// step2 if eth1 objectiveEnsurance metric changed, update the policy status
+		// step2 if the objectiveEnsurance metric changed, update the policy status
 		// step3 delete the old metric and add the new metric
 		// step4 if failed, delete all metrics for this policy
 		// step5 if succeed, update the policy status
@@ -132,14 +133,14 @@ func (c *NodeQOSEnsurancePolicyController) delete(nep *ensuranceapi.NodeQOSEnsur
 	if nepOld, ok := c.Cache.Get(nep.Name); ok {
 		for _, v := range nepOld.Nep.Spec.ObjectiveEnsurance {
 			var key = GenerateEnsuranceQosNodePolicyKey(nep.Name, v.AvoidanceActionName)
-			c.StateStore.DeleteMetric(key)
+			c.StateStore.DeleteMetric(key, types.NodeLocalCollectorType)
 		}
 	}
 
 	// step2: delete metrics from  nep
 	for _, v := range nep.Spec.ObjectiveEnsurance {
 		var key = GenerateEnsuranceQosNodePolicyKey(nep.Name, v.AvoidanceActionName)
-		c.StateStore.DeleteMetric(key)
+		c.StateStore.DeleteMetric(key, types.NodeLocalCollectorType)
 	}
 
 	return nil
