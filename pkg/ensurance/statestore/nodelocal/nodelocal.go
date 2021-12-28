@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"strings"
 
+	corelisters "k8s.io/client-go/listers/core/v1"
+
 	"github.com/gocrane/crane/pkg/common"
 	"github.com/gocrane/crane/pkg/ensurance/statestore/types"
 	"github.com/gocrane/crane/pkg/log"
 )
 
-type newCollectorFunc func() (nodeLocalCollector, error)
+type newCollectorFunc func(podLister corelisters.PodLister) (nodeLocalCollector, error)
 
 var nodeLocalMetric = make(map[string][]types.MetricName, 10)
 var nodeLocalFunc = make(map[string]newCollectorFunc, 10)
@@ -30,7 +32,7 @@ type NodeLocal struct {
 	nlcs []nodeLocalCollector
 }
 
-func NewNodeLocal() *NodeLocal {
+func NewNodeLocal(podLister corelisters.PodLister) *NodeLocal {
 	log.Logger().V(1).Info("NewNodeLocal")
 
 	n := NodeLocal{
@@ -40,7 +42,7 @@ func NewNodeLocal() *NodeLocal {
 	// the first version collect all metrics
 	// Open the on demand，in the future
 	for _, f := range nodeLocalFunc {
-		if c, err := f(); err == nil {
+		if c, err := f(podLister); err == nil {
 			n.nlcs = append(n.nlcs, c)
 		} else {
 			log.Logger().Error(err, "NewNodeLocal init failed")

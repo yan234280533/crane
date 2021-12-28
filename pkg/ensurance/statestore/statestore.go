@@ -5,10 +5,11 @@ import (
 	"sync"
 	"time"
 
+	coreinformers "k8s.io/client-go/informers/core/v1"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 
 	ensuranceapi "github.com/gocrane/api/ensurance/v1alpha1"
-
 	"github.com/gocrane/crane/pkg/common"
 	"github.com/gocrane/crane/pkg/ensurance/statestore/nodelocal"
 	"github.com/gocrane/crane/pkg/ensurance/statestore/types"
@@ -22,13 +23,20 @@ type stateStoreManager struct {
 	index        uint64
 	configCache  sync.Map
 
+	podLister corelisters.PodLister
+	podSynced cache.InformerSynced
+
 	collectors  []collector
 	StatusCache sync.Map
 }
 
-func NewStateStoreManager(nepInformer cache.SharedIndexInformer) StateStore {
+func NewStateStoreManager(nepInformer cache.SharedIndexInformer, podInformer coreinformers.PodInformer) StateStore {
 	var eventChan = make(chan types.UpdateEvent)
-	return &stateStoreManager{nepInformer: nepInformer, eventChannel: eventChan}
+	return &stateStoreManager{
+		nepInformer:  nepInformer,
+		podLister:    podInformer.Lister(),
+		podSynced:    podInformer.Informer().HasSynced,
+		eventChannel: eventChan}
 }
 
 func (s *stateStoreManager) Name() string {
@@ -36,6 +44,14 @@ func (s *stateStoreManager) Name() string {
 }
 
 func (s *stateStoreManager) Run(stop <-chan struct{}) {
+	// Wait for the caches to be synced before starting workers
+	if !cache.WaitForNamedCacheSync("stateStore-manager",
+		stop,
+		s.podSynced,
+	) {
+		return
+	}
+
 	// check need to update config
 	go func() {
 		updateTicker := time.NewTicker(10 * time.Second)
@@ -156,7 +172,7 @@ func (s *stateStoreManager) updateConfig() {
 		if n.Spec.NodeQualityProbe.NodeLocalGet != nil {
 			nodeLocal = true
 			if _, ok := s.configCache.Load(string(types.NodeLocalCollectorType)); !ok {
-				nc := nodelocal.NewNodeLocal()
+				nc := nodelocal.NewNodeLocal(s.podLister)
 				s.collectors = append(s.collectors, nc)
 				s.configCache.Store(string(types.NodeLocalCollectorType), types.MetricNameConfigs{})
 			}
