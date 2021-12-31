@@ -137,6 +137,9 @@ func (c *CadvisorCollector) collect() (map[string][]common.TimeSeries, error) {
 
 	var cpuUsageTimeSeries []common.TimeSeries
 	var schedRunQueueTimeSeries []common.TimeSeries
+	var cpuLimitTimeSeries []common.TimeSeries
+	var cpuQuotaTimeSeries []common.TimeSeries
+	var cpuPeriodTimeSeries []common.TimeSeries
 
 	for _, pod := range allPods {
 		var ref = GetCgroupRefFromPod(pod)
@@ -170,6 +173,9 @@ func (c *CadvisorCollector) collect() (map[string][]common.TimeSeries, error) {
 
 				cpuUsageTimeSeries = append(cpuUsageTimeSeries, common.TimeSeries{Labels: label, Samples: []common.Sample{{Value: cpuUsage, Timestamp: now.Unix()}}})
 				schedRunQueueTimeSeries = append(schedRunQueueTimeSeries, common.TimeSeries{Labels: label, Samples: []common.Sample{{Value: schedRunqueueTime, Timestamp: now.Unix()}}})
+				cpuLimitTimeSeries = append(cpuLimitTimeSeries, common.TimeSeries{Labels: label, Samples: []common.Sample{{Value: float64(state.stat.Spec.Cpu.Limit), Timestamp: now.Unix()}}})
+				cpuQuotaTimeSeries = append(cpuQuotaTimeSeries, common.TimeSeries{Labels: label, Samples: []common.Sample{{Value: float64(state.stat.Spec.Cpu.Quota), Timestamp: now.Unix()}}})
+				cpuPeriodTimeSeries = append(cpuPeriodTimeSeries, common.TimeSeries{Labels: label, Samples: []common.Sample{{Value: float64(state.stat.Spec.Cpu.Period), Timestamp: now.Unix()}}})
 			}
 
 			cgroupState[key] = CgroupState{stat: v, timestamp: now}
@@ -181,6 +187,9 @@ func (c *CadvisorCollector) collect() (map[string][]common.TimeSeries, error) {
 	var storeMaps = make(map[string][]common.TimeSeries, 0)
 	storeMaps[string(types.MetricNameContainerCpuTotalUsage)] = cpuUsageTimeSeries
 	storeMaps[string(types.MetricNameContainerSchedRunQueueTime)] = schedRunQueueTimeSeries
+	storeMaps[string(types.MetricNameContainerCpuLimit)] = cpuLimitTimeSeries
+	storeMaps[string(types.MetricNameContainerCpuQuota)] = cpuQuotaTimeSeries
+	storeMaps[string(types.MetricNameContainerCpuPeriod)] = cpuPeriodTimeSeries
 
 	return storeMaps, nil
 }
