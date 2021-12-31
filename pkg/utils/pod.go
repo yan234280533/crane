@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -53,4 +54,14 @@ func GetPodCondition(status *v1.PodStatus, conditionType v1.PodConditionType) (i
 		}
 	}
 	return -1, nil
+}
+
+func GetPodContainerByName(pod *v1.Pod, containerName string) (v1.Container, error) {
+	for _, v := range pod.Spec.Containers {
+		if v.Name == containerName {
+			return v, nil
+		}
+	}
+
+	return v1.Container{}, fmt.Errorf("container not found")
 }
