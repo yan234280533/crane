@@ -296,13 +296,20 @@ func (s *AnalyzerManager) doMerge(avoidanceMaps map[string]*ensuranceapi.Avoidan
 				}
 
 				for _, v := range allPods {
+					if v.Name != "low" {
+						continue
+					}
+
 					var qosPriority = executor.ScheduledQOSPriority{PodQOSClass: v.Status.QOSClass, PriorityClassValue: utils.GetInt32withDefault(v.Spec.Priority, 0)}
 					if !qosPriority.Greater(basicThrottleQosPriority) {
 						var throttlePod executor.ThrottlePod
 						throttlePod.PodTypes = types.NamespacedName{Namespace: v.Namespace, Name: v.Name}
 						throttlePod.CPUThrottle.MinCPURatio = action.Spec.Throttle.CPUThrottle.MinCPURatio
 						throttlePod.CPUThrottle.StepCPURatio = action.Spec.Throttle.CPUThrottle.StepCPURatio
+
 						throttlePod.PodCPUUsage, throttlePod.ContainerCPUUsages = s.getPodUsage(string(stypes.MetricNameContainerCpuTotalUsage), v)
+						klog.Infof("PodCPUUsage : %+v, ContainerCPUUsages: %+v", throttlePod.PodCPUUsage, throttlePod.ContainerCPUUsages)
+
 						throttlePod.PodCPUShare, throttlePod.ContainerCPUShares = s.getPodUsage(string(stypes.MetricNameContainerCpuLimit), v)
 						throttlePod.PodCPUQuota, throttlePod.ContainerCPUQuotas = s.getPodUsage(string(stypes.MetricNameContainerCpuQuota), v)
 						throttlePod.PodCPUPeriod, throttlePod.ContainerCPUPeriods = s.getPodUsage(string(stypes.MetricNameContainerCpuPeriod), v)
@@ -331,6 +338,8 @@ func (s *AnalyzerManager) doMerge(avoidanceMaps map[string]*ensuranceapi.Avoidan
 
 	// sort the throttle executor by pod qos priority
 	sort.Sort(ae.ThrottleExecutor.ThrottleDownPods)
+
+	klog.Infof("ae.ThrottleExecutor.ThrottleDownPods: %+v", ae.ThrottleExecutor.ThrottleDownPods)
 
 	if restoreScheduled {
 		var throttleUpPods executor.ThrottlePods

@@ -7,6 +7,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 
+	info "github.com/google/cadvisor/info/v1"
 	cadvisorapiv2 "github.com/google/cadvisor/info/v2"
 )
 
@@ -35,17 +36,17 @@ func TestCadvisor(t *testing.T) {
 
 	t.Logf("cadvisor %v", c)
 
-	containerInfos, err := c.Manager.AllDockerContainers(nil)
+	/*containerInfos, err := c.Manager.AllDockerContainers(nil)
 	if err != nil {
 		t.Fatalf("AllDockerContainers failed %s", err.Error())
 	}
-	t.Logf("containerInfos %v", containerInfos)
+	t.Logf("containerInfos %v", containerInfos)*/
 
 	if *cgroupPath != "" {
 		var start = time.Now()
 		containerInfo, err := c.Manager.GetContainerInfoV2(*cgroupPath, cadvisorapiv2.RequestOptions{
 			IdType:    cadvisorapiv2.TypeName,
-			Count:     1,
+			Count:     2,
 			Recursive: true,
 		})
 
@@ -59,8 +60,29 @@ func TestCadvisor(t *testing.T) {
 		t.Logf("cost:%d", end.UnixNano()-start.UnixNano())
 		t.Logf("containerInfo Schedstat %#v", spew.Sdump(containerInfo[*cgroupPath].Stats[0].Cpu.Schedstat))
 		t.Logf("containerInfo cpu %#v", spew.Sdump(containerInfo[*cgroupPath].Stats[0].Cpu.Usage.Total))
+		t.Logf("containerInfo CpuSpec %#v", containerInfo)
 
 		time.Sleep(1 * time.Second)
+
+		var start1 = time.Now()
+
+		var query = info.ContainerInfoRequest{NumStats: 60}
+
+		containerInfo11, err := c.Manager.GetContainerInfo(*cgroupPath, &query)
+
+		var end1 = time.Now()
+		t.Logf("cost1:%d", end1.UnixNano()-start1.UnixNano())
+
+		t.Logf("containerInfo11 CpuSpec %+v", containerInfo11.Spec.Cpu)
+
+		/*info, err := c.Manager.GetContainerInfo(*cgroupPath,nil)
+		if err != nil {
+			t.Fatalf("GetContainerInfo failed %s", err.Error())
+		}
+
+		t.Logf("containerInfo CpuSpec %#v", spew.Sdump(info.Spec.Cpu))*/
+
+		return
 
 		containerInfo2, err := c.Manager.GetContainerInfoV2(*cgroupPath, cadvisorapiv2.RequestOptions{
 			IdType:    cadvisorapiv2.TypeName,
@@ -103,4 +125,34 @@ func TestCadvisor(t *testing.T) {
 	}
 
 	t.Logf("TestCadvisor succeed")
+}
+
+type KeyTest struct {
+	input  string
+	output string
+}
+
+func TestGetContainerIdFromKey(t *testing.T) {
+	var cases = []KeyTest{
+		{
+			input:  "/kubepods/besteffort/pod04e5e9e7-8d95-44dd-9af7-ab944405fff8/18b514fc91ecb19b7ee79ebeaa6f2df86c6c939e420520b97ad4f7532582d35a",
+			output: "18b514fc91ecb19b7ee79ebeaa6f2df86c6c939e420520b97ad4f7532582d35a",
+		},
+		{
+			input:  "/kubepods/besteffort/pod04e5e9e7-8d95-44dd-9af7-ab944405fff8",
+			output: "",
+		},
+		{
+			input:  "/kubepods/besteffort/pod04e5e9e7-8d95-44dd-9af7-ab944405fff8/2cc2c4badac0618edda11bdd06826e7385b885ca88323b6f5d90270395e039d9",
+			output: "2cc2c4badac0618edda11bdd06826e7385b885ca88323b6f5d90270395e039d9",
+		},
+	}
+
+	for _, c := range cases {
+		if r := GetContainerIdFromKey(c.input); r != c.output {
+			t.Fatalf("TestGetContainerIdFromKey failed {%s,%s}, r: %s", c.input, c.output, r)
+		}
+	}
+
+	return
 }
