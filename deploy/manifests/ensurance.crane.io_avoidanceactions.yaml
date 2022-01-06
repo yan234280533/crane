@@ -35,7 +35,27 @@ spec:
             type: object
           spec:
             properties:
-              Throttle:
+              coolDownSeconds:
+                description: CoolDownSeconds is the seconds for cool down when do
+                  avoidance default is 300s
+                format: int64
+                type: integer
+              description:
+                description: Description is an arbitrary string that usually provides
+                  guidelines on when this action should be used.
+                type: string
+              eviction:
+                description: Eviction describes the eviction action
+                properties:
+                  terminationGracePeriodSeconds:
+                    description: TerminationGracePeriodSeconds is the duration in
+                      seconds the pod needs to terminate gracefully. May be decreased
+                      in delete request. Value must be non-negative integer. The value
+                      zero indicates delete immediately.
+                    format: int32
+                    type: integer
+                type: object
+              throttle:
                 description: Throttle describes the throttling action
                 properties:
                   cpuThrottle:
@@ -69,26 +89,6 @@ spec:
                         format: int32
                         type: integer
                     type: object
-                type: object
-              coolDownSeconds:
-                description: CoolDownSeconds is the seconds for cool down when do
-                  avoidance default is 300s
-                format: int64
-                type: integer
-              description:
-                description: Description is an arbitrary string that usually provides
-                  guidelines on when this action should be used.
-                type: string
-              eviction:
-                description: Eviction describes the eviction action
-                properties:
-                  terminationGracePeriodSeconds:
-                    description: TerminationGracePeriodSeconds is the duration in
-                      seconds the pod needs to terminate gracefully. May be decreased
-                      in delete request. Value must be non-negative integer. The value
-                      zero indicates delete immediately.
-                    format: int32
-                    type: integer
                 type: object
             type: object
           status:

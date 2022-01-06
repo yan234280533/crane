@@ -90,3 +90,13 @@ func Labels2Maps(labels []Label) map[string]string {
 
 	return maps
 }
+
+func GetValueByName(labels []Label, name string) string {
+	for _, v := range labels {
+		if v.Name == name {
+			return v.Value
+		}
+	}
+
+	return ""
+}

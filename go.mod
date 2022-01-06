@@ -3,7 +3,7 @@ module github.com/gocrane/crane
 go 1.17
 
 require (
-	github.com/davecgh/go-spew v1.1.1
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-echarts/go-echarts/v2 v2.2.4
 	github.com/go-logr/logr v0.4.0
 	github.com/gocrane/api v0.0.0-20220101093604-2129a9ce85e3
@@ -145,6 +145,7 @@ require (
 )
 
 replace (
+    github.com/gocrane/api => github.com/yan234280533/api v0.0.0-20220110132244-81898c3ebbae
 	golang.org/x/net => github.com/golang/net v0.0.0-20210825183410-e898025ed96a
 	k8s.io/api => k8s.io/api v0.22.3
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.22.3

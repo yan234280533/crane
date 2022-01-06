@@ -12,12 +12,9 @@ spec:
       localCacheTTLSeconds: 60
   objectiveEnsurances:
   - name: "cpu_usage"
-    reachedThreshold: 2
+    avoidanceThreshold: 2
     restoredThreshold: 2
     actionName: "disablescheduled"
     metricRule:
-      metric:
-        name: "cpu_total_usage"
-      target:
-        type: "Value"
-        value: 4000
+      name: "cpu_total_usage"
+      value: 4000
