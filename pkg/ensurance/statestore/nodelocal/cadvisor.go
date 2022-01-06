@@ -146,7 +146,7 @@ func (c *CadvisorCollector) collect() (map[string][]common.TimeSeries, error) {
 		var ref = GetCgroupRefFromPod(pod)
 		var now = time.Now()
 
-		if pod.Name != "middle" {
+		if !((pod.Name == "middle") || (pod.Name == "low")) {
 			continue
 		}
 
@@ -188,13 +188,19 @@ func (c *CadvisorCollector) collect() (map[string][]common.TimeSeries, error) {
 				cpuUsage := float64(cpuUsageIncrease) / float64(timeIncrease)
 				schedRunqueueTime := float64(schedRunqueueTimeIncrease) * 1000 * 1000 / float64(timeIncrease)
 
+				if pod.Name == "low" {
+					schedRunqueueTime = 0.0
+				}
+
 				cpuUsageTimeSeries = append(cpuUsageTimeSeries, common.TimeSeries{Labels: label, Samples: []common.Sample{{Value: cpuUsage, Timestamp: now.Unix()}}})
 				schedRunQueueTimeSeries = append(schedRunQueueTimeSeries, common.TimeSeries{Labels: label, Samples: []common.Sample{{Value: schedRunqueueTime, Timestamp: now.Unix()}}})
 				cpuLimitTimeSeries = append(cpuLimitTimeSeries, common.TimeSeries{Labels: label, Samples: []common.Sample{{Value: float64(state.stat.Spec.Cpu.Limit), Timestamp: now.Unix()}}})
 				cpuQuotaTimeSeries = append(cpuQuotaTimeSeries, common.TimeSeries{Labels: label, Samples: []common.Sample{{Value: float64(containerInfoV1.Spec.Cpu.Quota), Timestamp: now.Unix()}}})
 				cpuPeriodTimeSeries = append(cpuPeriodTimeSeries, common.TimeSeries{Labels: label, Samples: []common.Sample{{Value: float64(containerInfoV1.Spec.Cpu.Period), Timestamp: now.Unix()}}})
 
-				klog.Infof("key1 %s, schedRunqueueTime %v", key, schedRunqueueTime)
+				if pod.Name == "middle" {
+					klog.Infof("key1 %s, schedRunqueueTime %v", key, schedRunqueueTime)
+				}
 			}
 
 			cgroupState[key] = CgroupState{stat: v, timestamp: now}

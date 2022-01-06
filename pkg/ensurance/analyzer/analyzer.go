@@ -189,34 +189,93 @@ func (s *AnalyzerManager) Analyze() {
 func (s *AnalyzerManager) doAnalyze(key string, object ensuranceapi.ObjectiveEnsurance) (ecache.DetectionCondition, error) {
 	var dc = ecache.DetectionCondition{DryRun: object.DryRun, ObjectiveEnsuranceName: object.Name, ActionName: object.AvoidanceActionName}
 
-	//step1: get metric value
-	value, err := s.getMetricFromMap(object.MetricRule.Metric.Name, object.MetricRule.Metric.Selector)
-	if err != nil {
-		return dc, err
-	}
-
-	//step2: use opa to check if reached
-	threshold, err := s.logic.EvalWithMetric(object.MetricRule.Metric.Name, float64(object.MetricRule.Target.Value.Value()), value)
-	if err != nil {
-		return dc, err
-	}
-
-	//step3: check is reached action or restored, set the detection
-	if threshold {
-		s.restored[key] = 0
-		reached := utils.GetUint64FromMaps(key, s.reached)
-		reached++
-		s.reached[key] = reached
-		if reached >= uint64(object.ReachedThreshold) {
-			dc.Triggered = true
+	if strings.HasPrefix(object.MetricRule.Metric.Name, "container") {
+		//step1: get series from value
+		series, err := s.getTimeSeriesFromMap(object.MetricRule.Metric.Name, object.MetricRule.Metric.Selector)
+		if err != nil {
+			return dc, err
 		}
+
+		if len(series) == 0 {
+			return dc, fmt.Errorf("metric %s not found", object.MetricRule.Metric.Name)
+		}
+
+		var beInfluencedPods []types.NamespacedName
+		var threshold bool
+		for _, serie := range series {
+			b, err := s.logic.EvalWithMetric(object.MetricRule.Metric.Name, float64(object.MetricRule.Target.Value.Value()), serie.Samples[0].Value)
+			if err != nil {
+				return dc, err
+			}
+
+			if b {
+				if (common.GetValueByName(serie.Labels, "PodName") != "") &&
+					(common.GetValueByName(serie.Labels, "PodNamespace") != "") {
+
+					if common.GetValueByName(serie.Labels, "PodName") == "middle" {
+						beInfluencedPods = append(beInfluencedPods, types.NamespacedName{Name: common.GetValueByName(serie.Labels, "PodName"),
+							Namespace: common.GetValueByName(serie.Labels, "PodNamespace")})
+						threshold = true
+					} else {
+						//
+					}
+				} else {
+					threshold = true
+				}
+			}
+
+			//step3: check is reached action or restored, set the detection
+			if threshold {
+				s.restored[key] = 0
+				reached := utils.GetUint64FromMaps(key, s.reached)
+				reached++
+				s.reached[key] = reached
+				if reached >= uint64(object.ReachedThreshold) {
+					dc.Triggered = true
+					dc.BeInfluencedPods = beInfluencedPods
+				}
+			} else {
+				s.reached[key] = 0
+				restored := utils.GetUint64FromMaps(key, s.restored)
+				restored++
+				s.restored[key] = restored
+				if restored >= uint64(object.RestoredThreshold) {
+					dc.Restored = true
+				}
+			}
+		}
+
 	} else {
-		s.reached[key] = 0
-		restored := utils.GetUint64FromMaps(key, s.restored)
-		restored++
-		s.restored[key] = restored
-		if restored >= uint64(object.RestoredThreshold) {
-			dc.Restored = true
+
+		//step1: get metric value
+		value, err := s.getMetricFromMap(object.MetricRule.Metric.Name, object.MetricRule.Metric.Selector)
+		if err != nil {
+			return dc, err
+		}
+
+		//step2: use opa to check if reached
+		threshold, err := s.logic.EvalWithMetric(object.MetricRule.Metric.Name, float64(object.MetricRule.Target.Value.Value()), value)
+		if err != nil {
+			return dc, err
+		}
+
+		//step3: check is reached action or restored, set the detection
+		if threshold {
+			s.restored[key] = 0
+			reached := utils.GetUint64FromMaps(key, s.reached)
+			reached++
+			s.reached[key] = reached
+			if reached >= uint64(object.ReachedThreshold) {
+				dc.Triggered = true
+			}
+		} else {
+			s.reached[key] = 0
+			restored := utils.GetUint64FromMaps(key, s.restored)
+			restored++
+			s.restored[key] = restored
+			if restored >= uint64(object.RestoredThreshold) {
+				dc.Restored = true
+			}
 		}
 	}
 
@@ -278,7 +337,6 @@ func (s *AnalyzerManager) doMerge(avoidanceMaps map[string]*ensuranceapi.Avoidan
 	}
 
 	//step3 do Throttle merge FilterAndSortThrottlePods
-	var basicThrottleQosPriority = executor.ScheduledQOSPriority{PodQOSClass: v1.PodQOSBestEffort, PriorityClassValue: 0}
 	var throttlePods executor.ThrottlePods
 	for _, dc := range dcsFiltered {
 		if dc.Triggered {
@@ -289,6 +347,16 @@ func (s *AnalyzerManager) doMerge(avoidanceMaps map[string]*ensuranceapi.Avoidan
 			}
 
 			if action.Spec.Throttle != nil {
+				var basicThrottleQosPriority executor.ScheduledQOSPriority
+				if len(dc.BeInfluencedPods) > 0 {
+					_, beInfluencedPodPriority := executor.GetMaxQOSPriority(s.podLister, dc.BeInfluencedPods)
+					if beInfluencedPodPriority.Greater(basicThrottleQosPriority) {
+						basicThrottleQosPriority = beInfluencedPodPriority
+					}
+				} else {
+					basicThrottleQosPriority = executor.ScheduledQOSPriority{PodQOSClass: v1.PodQOSBestEffort, PriorityClassValue: 0}
+				}
+
 				allPods, err := s.podLister.List(labels.Everything())
 				if err != nil {
 					klog.Errorf("Failed to list all pods: %v", err)
@@ -361,18 +429,16 @@ func (s *AnalyzerManager) doMerge(avoidanceMaps map[string]*ensuranceapi.Avoidan
 
 					for _, v := range allPods {
 						var qosPriority = executor.ScheduledQOSPriority{PodQOSClass: v.Status.QOSClass, PriorityClassValue: utils.GetInt32withDefault(v.Spec.Priority, 0)}
-						if !qosPriority.Greater(basicThrottleQosPriority) {
-							var throttlePod executor.ThrottlePod
-							throttlePod.PodTypes = types.NamespacedName{Namespace: v.Namespace, Name: v.Name}
-							throttlePod.CPUThrottle.MinCPURatio = action.Spec.Throttle.CPUThrottle.MinCPURatio
-							throttlePod.CPUThrottle.StepCPURatio = action.Spec.Throttle.CPUThrottle.StepCPURatio
-							throttlePod.PodCPUUsage, throttlePod.ContainerCPUUsages = s.getPodUsage(string(stypes.MetricNameContainerCpuTotalUsage), v)
-							throttlePod.PodCPUShare, throttlePod.ContainerCPUShares = s.getPodUsage(string(stypes.MetricNameContainerCpuLimit), v)
-							throttlePod.PodCPUQuota, throttlePod.ContainerCPUQuotas = s.getPodUsage(string(stypes.MetricNameContainerCpuQuota), v)
-							throttlePod.PodCPUPeriod, throttlePod.ContainerCPUPeriods = s.getPodUsage(string(stypes.MetricNameContainerCpuPeriod), v)
-							throttlePod.PodQOSPriority = qosPriority
-							throttleUpPods = append(throttleUpPods, throttlePod)
-						}
+						var throttlePod executor.ThrottlePod
+						throttlePod.PodTypes = types.NamespacedName{Namespace: v.Namespace, Name: v.Name}
+						throttlePod.CPUThrottle.MinCPURatio = action.Spec.Throttle.CPUThrottle.MinCPURatio
+						throttlePod.CPUThrottle.StepCPURatio = action.Spec.Throttle.CPUThrottle.StepCPURatio
+						throttlePod.PodCPUUsage, throttlePod.ContainerCPUUsages = s.getPodUsage(string(stypes.MetricNameContainerCpuTotalUsage), v)
+						throttlePod.PodCPUShare, throttlePod.ContainerCPUShares = s.getPodUsage(string(stypes.MetricNameContainerCpuLimit), v)
+						throttlePod.PodCPUQuota, throttlePod.ContainerCPUQuotas = s.getPodUsage(string(stypes.MetricNameContainerCpuQuota), v)
+						throttlePod.PodCPUPeriod, throttlePod.ContainerCPUPeriods = s.getPodUsage(string(stypes.MetricNameContainerCpuPeriod), v)
+						throttlePod.PodQOSPriority = qosPriority
+						throttleUpPods = append(throttleUpPods, throttlePod)
 					}
 				}
 			}
@@ -492,6 +558,25 @@ func (s *AnalyzerManager) getMetricFromMap(metricName string, selector *metav1.L
 	}
 
 	return 0, fmt.Errorf("metricName %s not found value", metricName)
+}
+
+func (s *AnalyzerManager) getTimeSeriesFromMap(metricName string, selector *metav1.LabelSelector) ([]common.TimeSeries, error) {
+	var series []common.TimeSeries
+
+	// step1: get the series from maps
+	if v, ok := s.status[metricName]; ok {
+		for _, vv := range v {
+			if matched, err := utils.LabelSelectorMatched(common.Labels2Maps(vv.Labels), selector); err != nil {
+				continue
+			} else if !matched {
+				continue
+			} else {
+				series = append(series, vv)
+			}
+		}
+	}
+
+	return series, nil
 }
 
 func (s *AnalyzerManager) noticeAvoidanceManager(as executor.AvoidanceExecutor) {

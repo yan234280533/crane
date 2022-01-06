@@ -1,7 +1,10 @@
 package executor
 
 import (
+	"github.com/gocrane/crane/pkg/utils"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	corelisters "k8s.io/client-go/listers/core/v1"
 
 	client "github.com/gocrane/crane/pkg/ensurance/client"
 	"github.com/gocrane/crane/pkg/known"
@@ -105,6 +108,26 @@ func (s ScheduledQOSPriority) Greater(i ScheduledQOSPriority) bool {
 	}
 
 	return s.PriorityClassValue > i.PriorityClassValue
+}
+
+func GetMaxQOSPriority(podLister corelisters.PodLister, podTypes []types.NamespacedName) (types.NamespacedName, ScheduledQOSPriority) {
+
+	var podType types.NamespacedName
+	var scheduledQOSPriority ScheduledQOSPriority
+
+	for _, podNamespace := range podTypes {
+		if pod, err := podLister.Pods(podNamespace.Namespace).Get(podNamespace.Name); err != nil {
+			continue
+		} else {
+			var priority = ScheduledQOSPriority{PodQOSClass: pod.Status.QOSClass, PriorityClassValue: utils.GetInt32withDefault(pod.Spec.Priority, 0) - 1}
+			if priority.Greater(scheduledQOSPriority) {
+				scheduledQOSPriority = priority
+				podType = podNamespace
+			}
+		}
+	}
+
+	return podType, scheduledQOSPriority
 }
 
 // We defined guaranteed is the highest qos class, burstable is the middle level
