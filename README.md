@@ -71,6 +71,8 @@ Avoidance Actions:
 - **Throttle**: throttle the low priority pods by squeezing cgroup settings
 - **Evict**: evict low priority pods
 
+Please see [this document](./docs/tutorials/using-qos-ensurance.md) to learn more.
+
 ## Repositories
 
 Crane is composed of the following components:
