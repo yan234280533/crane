@@ -15,6 +15,8 @@ type MetricName string
 const (
 	MetricNameCpuTotalUsage              MetricName = "cpu_total_usage"
 	MetricNameCpuTotalUtilization        MetricName = "cpu_total_utilization"
+	MetricNameMemoryTotalUsage           MetricName = "memory_total_usage"
+	MetricNameMemoryTotalUtilization     MetricName = "memory_total_utilization"
 	MetricNameContainerCpuTotalUsage     MetricName = "container_cpu_total_usage"
 	MetricNameContainerCpuLimit          MetricName = "container_cpu_limit"
 	MetricNameContainerCpuQuota          MetricName = "container_cpu_quota"
