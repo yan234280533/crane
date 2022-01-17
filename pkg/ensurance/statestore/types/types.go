@@ -28,6 +28,13 @@ const (
 	MetricDiskWriteIOPS   MetricName = "disk_read_iops"
 	MetricDiskUtilization MetricName = "disk_read_utilization"
 
+	MetricNetworkReceiveKiBPS MetricName = "network_receive_kibps"
+	MetricNetworkSentKiBPS    MetricName = "network_sent_kibps"
+	MetricNetworkReceivePckPS MetricName = "network_receive_pckps"
+	MetricNetworkSentPckPS    MetricName = "network_sent_pckps"
+	MetricNetworkDropIn       MetricName = "network_drop_in"
+	MetricNetworkDropOut      MetricName = "network_drop_out"
+
 	MetricNameContainerCpuTotalUsage     MetricName = "container_cpu_total_usage"
 	MetricNameContainerCpuLimit          MetricName = "container_cpu_limit"
 	MetricNameContainerCpuQuota          MetricName = "container_cpu_quota"
