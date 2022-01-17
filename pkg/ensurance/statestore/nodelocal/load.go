@@ -2,13 +2,13 @@ package nodelocal
 
 import (
 	"fmt"
-	"github.com/gocrane/crane/pkg/common"
-	corelisters "k8s.io/client-go/listers/core/v1"
-	"k8s.io/klog/v2"
 	"time"
 
 	"github.com/shirou/gopsutil/load"
+	corelisters "k8s.io/client-go/listers/core/v1"
+	"k8s.io/klog/v2"
 
+	"github.com/gocrane/crane/pkg/common"
 	"github.com/gocrane/crane/pkg/ensurance/statestore/types"
 )
 
