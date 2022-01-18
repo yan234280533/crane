@@ -21,14 +21,8 @@ func init() {
 	registerMetrics(memoryCollectorName, []types.MetricName{types.MetricNameMemoryTotalUsage, types.MetricNameMemoryTotalUtilization}, NewMemoryCollector)
 }
 
-type MemoryTimeStampState struct {
-	stat      mem.VirtualMemoryStat
-	timestamp time.Time
-}
-
 type MemoryCollector struct {
-	memoryState *MemoryTimeStampState
-	data        map[string][]common.TimeSeries
+	data map[string][]common.TimeSeries
 }
 
 // NewMemoryCollector returns a new Collector exposing kernel/system statistics.
@@ -52,17 +46,11 @@ func (c *MemoryCollector) collect() (map[string][]common.TimeSeries, error) {
 		return map[string][]common.TimeSeries{}, fmt.Errorf("stat is nil")
 	}
 
-	nowMemoryState := &MemoryTimeStampState{
-		stat:      *stat,
-		timestamp: now,
-	}
+	usage := stat.Total - stat.Available
+	usagePercent := float64(usage) / float64(stat.Total) * 100.0
 
-	c.memoryState = nowMemoryState
-
-	usagePercent := c.memoryState.stat.UsedPercent
-	usage := c.memoryState.stat.Used
-
-	klog.V(6).Infof("MemoryCollector collected,usagePercent %v, usageCore %v", usagePercent, usage)
+	klog.V(6).Infof("MemoryCollector collected, total %d, Free %d, Available %d, usagePercent %.2f, usageCore %d",
+		stat.Total, stat.Free, stat.Available, usagePercent, usage)
 
 	c.data[string(types.MetricNameMemoryTotalUsage)] = []common.TimeSeries{{Samples: []common.Sample{{Value: float64(usage), Timestamp: now.Unix()}}}}
 	c.data[string(types.MetricNameCpuTotalUtilization)] = []common.TimeSeries{{Samples: []common.Sample{{Value: usagePercent, Timestamp: now.Unix()}}}}

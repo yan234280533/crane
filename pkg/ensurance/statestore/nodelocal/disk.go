@@ -88,6 +88,8 @@ func (d *DiskIOCollector) collect() (map[string][]common.TimeSeries, error) {
 	storeMaps[string(types.MetricDiskWriteIOPS)] = diskWriteIOpsTimeSeries
 	storeMaps[string(types.MetricDiskUtilization)] = diskUtilizationTimeSeries
 
+	klog.V(2).Infof("DiskIOCollector %#v", storeMaps)
+
 	return storeMaps, nil
 }
 
