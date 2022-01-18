@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/shirou/gopsutil/net"
-	corelisters "k8s.io/client-go/listers/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
 	"github.com/gocrane/crane/pkg/common"
@@ -42,14 +42,15 @@ type NetInterfaceUsage struct {
 
 type NetIOCollector struct {
 	netStates map[string]NetTimeStampState
+	ifaces    sets.String
 }
 
 // NewNetIOCollector returns a new Collector exposing kernel/system statistics.
-func NewNetIOCollector(_ corelisters.PodLister) (nodeLocalCollector, error) {
+func NewNetIOCollector(context *NodeLocalContext) (nodeLocalCollector, error) {
 
 	klog.V(2).Infof("NewNetIOCollector")
 
-	return &NetIOCollector{netStates: make(map[string]NetTimeStampState)}, nil
+	return &NetIOCollector{netStates: make(map[string]NetTimeStampState), ifaces: sets.NewString(context.Ifaces...)}, nil
 }
 
 func (n *NetIOCollector) collect() (map[string][]common.TimeSeries, error) {
@@ -74,9 +75,13 @@ func (n *NetIOCollector) collect() (map[string][]common.TimeSeries, error) {
 			continue
 		}
 
+		if !n.ifaces.Has(v.Name) {
+			continue
+		}
+
 		netStateMaps[v.Name] = NetTimeStampState{stat: v, timestamp: now}
 		if vv, ok := n.netStates[v.Name]; ok {
-			netIOUsage := calculateNetIO(netStateMaps[v.Name], vv)
+			netIOUsage := calculateNetIO(vv, netStateMaps[v.Name])
 			netReceiveKiBpsTimeSeries = append(netReceiveKiBpsTimeSeries, common.TimeSeries{Labels: []common.Label{{Name: "NetInterface", Value: v.Name}}, Samples: []common.Sample{{Value: netIOUsage.ReceiveKibps, Timestamp: now.Unix()}}})
 			netSentKiBpsTimeSeries = append(netSentKiBpsTimeSeries, common.TimeSeries{Labels: []common.Label{{Name: "NetInterface", Value: v.Name}}, Samples: []common.Sample{{Value: netIOUsage.SentKibps, Timestamp: now.Unix()}}})
 			netReceivePckpsTimeSeries = append(netReceivePckpsTimeSeries, common.TimeSeries{Labels: []common.Label{{Name: "NetInterface", Value: v.Name}}, Samples: []common.Sample{{Value: netIOUsage.ReceivePckps, Timestamp: now.Unix()}}})
@@ -95,6 +100,8 @@ func (n *NetIOCollector) collect() (map[string][]common.TimeSeries, error) {
 	storeMaps[string(types.MetricNetworkSentPckPS)] = netSentPckpsTimeSeries
 	storeMaps[string(types.MetricNetworkDropIn)] = netDropInTimeSeries
 	storeMaps[string(types.MetricNetworkDropOut)] = netDropOutTimeSeries
+
+	klog.V(2).Infof("storeMaps %#v", storeMaps)
 
 	return storeMaps, nil
 }

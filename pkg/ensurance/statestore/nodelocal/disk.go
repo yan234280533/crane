@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/shirou/gopsutil/disk"
-	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog/v2"
 
 	"github.com/gocrane/crane/pkg/common"
@@ -39,7 +38,7 @@ type DiskIOUsage struct {
 }
 
 // NewDiskIOCollector returns a new Collector exposing kernel/system statistics.
-func NewDiskIOCollector(_ corelisters.PodLister) (nodeLocalCollector, error) {
+func NewDiskIOCollector(_ *NodeLocalContext) (nodeLocalCollector, error) {
 
 	klog.V(2).Infof("NewDiskIOCollector")
 
@@ -70,7 +69,7 @@ func (d *DiskIOCollector) collect() (map[string][]common.TimeSeries, error) {
 	for key, v := range diskIOStats {
 		diskStateMaps[key] = DiskTimeStampState{stat: v, timestamp: now}
 		if vv, ok := d.diskStates[key]; ok {
-			diskIOUsage := calculateDiskIO(diskStateMaps[key], vv)
+			diskIOUsage := calculateDiskIO(vv, diskStateMaps[key])
 			diskReadKiBpsTimeSeries = append(diskReadKiBpsTimeSeries, common.TimeSeries{Labels: []common.Label{{Name: "diskName", Value: key}}, Samples: []common.Sample{{Value: diskIOUsage.DiskReadKiBps, Timestamp: now.Unix()}}})
 			diskWriteKiBpsTimeSeries = append(diskWriteKiBpsTimeSeries, common.TimeSeries{Labels: []common.Label{{Name: "diskName", Value: key}}, Samples: []common.Sample{{Value: diskIOUsage.DiskWriteKiBps, Timestamp: now.Unix()}}})
 			diskReadIOpsTimeSeries = append(diskReadIOpsTimeSeries, common.TimeSeries{Labels: []common.Label{{Name: "diskName", Value: key}}, Samples: []common.Sample{{Value: diskIOUsage.DiskReadIOps, Timestamp: now.Unix()}}})

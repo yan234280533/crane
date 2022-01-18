@@ -50,7 +50,7 @@ type CadvisorCollector struct {
 	MaxHousekeepingConfig cmanager.HouskeepingConfig
 }
 
-func NewCadvisor(podLister corelisters.PodLister) (nodeLocalCollector, error) {
+func NewCadvisor(context *NodeLocalContext) (nodeLocalCollector, error) {
 	klog.V(2).Info("NewCadvisor")
 
 	var includedMetrics = cadvisorcontainer.MetricSet{
@@ -71,7 +71,7 @@ func NewCadvisor(podLister corelisters.PodLister) (nodeLocalCollector, error) {
 
 	c := CadvisorCollector{
 		Manager:   m,
-		podLister: podLister,
+		podLister: context.PodLister,
 	}
 
 	if err := c.Manager.Start(); err != nil {

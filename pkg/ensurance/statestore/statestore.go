@@ -21,6 +21,7 @@ type stateStoreManager struct {
 	eventChannel chan types.UpdateEvent
 	index        uint64
 	configCache  sync.Map
+	ifaces       []string
 
 	podLister corelisters.PodLister
 	podSynced cache.InformerSynced
@@ -29,12 +30,13 @@ type stateStoreManager struct {
 	StatusCache sync.Map
 }
 
-func NewStateStoreManager(nepInformer cache.SharedIndexInformer, podInformer coreinformers.PodInformer) StateStore {
+func NewStateStoreManager(nepInformer cache.SharedIndexInformer, podInformer coreinformers.PodInformer, ifaces []string) StateStore {
 	var eventChan = make(chan types.UpdateEvent)
 	return &stateStoreManager{
 		nepInformer:  nepInformer,
 		podLister:    podInformer.Lister(),
 		podSynced:    podInformer.Informer().HasSynced,
+		ifaces:       ifaces,
 		eventChannel: eventChan}
 }
 
@@ -170,7 +172,7 @@ func (s *stateStoreManager) updateConfig() {
 		if n.Spec.NodeQualityProbe.NodeLocalGet != nil {
 			nodeLocal = true
 			if _, ok := s.configCache.Load(string(types.NodeLocalCollectorType)); !ok {
-				nc := nodelocal.NewNodeLocal(s.podLister)
+				nc := nodelocal.NewNodeLocal(s.podLister, s.ifaces)
 				s.collectors = append(s.collectors, nc)
 				s.configCache.Store(string(types.NodeLocalCollectorType), types.MetricNameConfigs{})
 			}

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/shirou/gopsutil/load"
-	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog/v2"
 
 	"github.com/gocrane/crane/pkg/common"
@@ -20,18 +19,12 @@ func init() {
 	registerMetrics(loadCollectorName, []types.MetricName{types.MetricNameCpuLoad1Min, types.MetricNameCpuLoad5Min, types.MetricNameCpuLoad15Min}, NewLoadCollector)
 }
 
-type LoadTimeStampState struct {
-	stat      load.AvgStat
-	timestamp time.Time
-}
-
 type LoadCollector struct {
-	loadState *LoadTimeStampState
-	data      map[string][]common.TimeSeries
+	data map[string][]common.TimeSeries
 }
 
 // NewLoadCollector returns a new Collector exposing kernel/system statistics.
-func NewLoadCollector(_ corelisters.PodLister) (nodeLocalCollector, error) {
+func NewLoadCollector(_ *NodeLocalContext) (nodeLocalCollector, error) {
 
 	klog.V(2).Infof("NewLoadCollector")
 
@@ -51,12 +44,7 @@ func (l *LoadCollector) collect() (map[string][]common.TimeSeries, error) {
 		return map[string][]common.TimeSeries{}, fmt.Errorf("stat is nil")
 	}
 
-	l.loadState = &LoadTimeStampState{
-		stat:      *stat,
-		timestamp: now,
-	}
-
-	klog.V(6).Infof("LoadCollector collected,1minLoad %v, 5minLoad %v, 15minLoad", stat.Load1, stat.Load5, stat.Load15)
+	klog.V(6).Infof("LoadCollector collected,1minLoad %v, 5minLoad %v, 15minLoad %v", stat.Load1, stat.Load5, stat.Load15)
 
 	l.data[string(types.MetricNameCpuLoad1Min)] = []common.TimeSeries{{Samples: []common.Sample{{Value: stat.Load1, Timestamp: now.Unix()}}}}
 	l.data[string(types.MetricNameCpuLoad5Min)] = []common.TimeSeries{{Samples: []common.Sample{{Value: stat.Load5, Timestamp: now.Unix()}}}}

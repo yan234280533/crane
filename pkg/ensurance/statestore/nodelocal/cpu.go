@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/shirou/gopsutil/cpu"
-	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog/v2"
 
 	"github.com/gocrane/crane/pkg/common"
@@ -35,7 +34,7 @@ type CpuCollector struct {
 }
 
 // NewCPUCollector returns a new Collector exposing kernel/system statistics.
-func NewCPUCollector(_ corelisters.PodLister) (nodeLocalCollector, error) {
+func NewCPUCollector(_ *NodeLocalContext) (nodeLocalCollector, error) {
 	var cpuCoreNumbers uint64
 	if cpuInfos, err := cpu.Info(); err != nil {
 		return nil, err
