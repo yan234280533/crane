@@ -21,8 +21,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	analysisapi "github.com/gocrane/api/analysis/v1alpha1"
+	ensuranceapi "github.com/gocrane/api/ensurance/v1alpha1"
 	predictionapi "github.com/gocrane/api/prediction/v1alpha1"
 
+	"github.com/gocrane/crane/pkg/webhooks/ensurance"
 	"github.com/gocrane/crane/pkg/webhooks/prediction"
 	"github.com/gocrane/crane/pkg/webhooks/recommendation"
 )
@@ -53,6 +55,24 @@ func SetupWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 	if err != nil {
 		klog.Errorf("Failed to setup analytics webhook: %v", err)
+	}
+
+	nepValidationAdmission := ensurance.NepValidationAdmission{}
+	err = ctrl.NewWebhookManagedBy(mgr).
+		For(&ensuranceapi.NodeQOSEnsurancePolicy{}).
+		WithValidator(&nepValidationAdmission).
+		Complete()
+	if err != nil {
+		klog.Errorf("Failed to setup NodeQOSEnsurancePolicy webhook: %v", err)
+	}
+
+	actionValidationAdmission := ensurance.ActionValidationAdmission{}
+	err = ctrl.NewWebhookManagedBy(mgr).
+		For(&ensuranceapi.AvoidanceAction{}).
+		WithValidator(&actionValidationAdmission).
+		Complete()
+	if err != nil {
+		klog.Errorf("Failed to setup AvoidanceAction webhook: %v", err)
 	}
 
 	return err

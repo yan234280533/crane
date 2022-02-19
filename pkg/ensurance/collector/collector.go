@@ -178,3 +178,15 @@ func (s *StateCollector) StopCollectors() {
 
 	return
 }
+
+func CheckMetricNameExist(name string) bool {
+	if nodelocal.CheckMetricNameExist(name) {
+		return true
+	}
+
+	if cadvisor.CheckMetricNameExist(name) {
+		return true
+	}
+
+	return false
+}
