@@ -132,13 +132,13 @@ func validateObjectiveEnsurances(objects []ensuranceapi.ObjectiveEnsurance, fldP
 			}
 		}
 
-		if obj.AvoidanceThreshold != nil {
-			allErrs = append(allErrs, genericvalidation.ValidateNonnegativeField(int64(*obj.AvoidanceThreshold), idxPath.Child("avoidanceThreshold"))...)
-		}
+		//if obj.AvoidanceThreshold != nil {
+		//allErrs = append(allErrs, genericvalidation.ValidateNonnegativeField(int64(obj.AvoidanceThreshold), idxPath.Child("avoidanceThreshold"))...)
+		//}
 
-		if obj.RestoreThreshold != nil {
-			allErrs = append(allErrs, genericvalidation.ValidateNonnegativeField(int64(*obj.RestoreThreshold), idxPath.Child("restoreThreshold"))...)
-		}
+		//if obj.RestoreThreshold != nil {
+		//allErrs = append(allErrs, genericvalidation.ValidateNonnegativeField(int64(obj.RestoreThreshold), idxPath.Child("restoreThreshold"))...)
+		//}
 
 		if obj.MetricRule == nil {
 			allErrs = append(allErrs, field.Required(idxPath.Child("metricRule"), ""))

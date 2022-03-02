@@ -141,6 +141,9 @@ func (s *AnormalyAnalyzer) Analyze(state map[string][]common.TimeSeries) {
 	}
 
 	for _, nep := range allNeps {
+
+		klog.Warningf("Warning: AvoidanceThreshold %v", nep.Spec.ObjectiveEnsurances[0].AvoidanceThreshold)
+
 		if matched, err := utils.LabelSelectorMatched(node.Labels, nep.Spec.Selector); err != nil || !matched {
 			continue
 		}
@@ -249,7 +252,7 @@ func (s *AnormalyAnalyzer) analyze(key string, object ensuranceapi.ObjectiveEnsu
 			triggered := utils.GetUint64FromMaps(key, s.triggered)
 			triggered++
 			s.triggered[key] = triggered
-			if triggered >= uint64(utils.GetInt32withDefault(object.AvoidanceThreshold, known.DefaultAvoidedThreshold)) {
+			if triggered >= uint64(object.AvoidanceThreshold) {
 				dc.Triggered = true
 				dc.BeInfluencedPods = impacted
 			}
@@ -258,7 +261,7 @@ func (s *AnormalyAnalyzer) analyze(key string, object ensuranceapi.ObjectiveEnsu
 			restored := utils.GetUint64FromMaps(key, s.restored)
 			restored++
 			s.restored[key] = restored
-			if restored >= uint64(utils.GetInt32withDefault(object.RestoreThreshold, known.DefaultRestoredThreshold)) {
+			if restored >= uint64(object.RestoreThreshold) {
 				dc.Restored = true
 			}
 		}
@@ -280,7 +283,7 @@ func (s *AnormalyAnalyzer) analyze(key string, object ensuranceapi.ObjectiveEnsu
 			triggered := utils.GetUint64FromMaps(key, s.triggered)
 			triggered++
 			s.triggered[key] = triggered
-			if triggered >= uint64(utils.GetInt32withDefault(object.AvoidanceThreshold, known.DefaultAvoidedThreshold)) {
+			if triggered >= uint64(object.AvoidanceThreshold) {
 				dc.Triggered = true
 			}
 		} else {
@@ -288,7 +291,7 @@ func (s *AnormalyAnalyzer) analyze(key string, object ensuranceapi.ObjectiveEnsu
 			restored := utils.GetUint64FromMaps(key, s.restored)
 			restored++
 			s.restored[key] = restored
-			if restored >= uint64(utils.GetInt32withDefault(object.RestoreThreshold, known.DefaultRestoredThreshold)) {
+			if restored >= uint64(object.RestoreThreshold) {
 				dc.Restored = true
 			}
 		}

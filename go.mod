@@ -165,6 +165,7 @@ require (
 )
 
 replace (
+	github.com/gocrane/api => github.com/yan234280533/api v0.0.0-20220302044832-618d34fd01ba
 	github.com/grafana-tools/sdk => github.com/csmarchbanks/sdk v0.0.0-20220120205302-870d00a83f4e
 	golang.org/x/net => github.com/golang/net v0.0.0-20210825183410-e898025ed96a
 	k8s.io/api => k8s.io/api v0.22.3
