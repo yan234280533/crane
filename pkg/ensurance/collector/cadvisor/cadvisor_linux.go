@@ -21,6 +21,7 @@ import (
 
 	"github.com/gocrane/crane/pkg/common"
 	"github.com/gocrane/crane/pkg/ensurance/collector/types"
+	"github.com/gocrane/crane/pkg/metrics"
 	"github.com/gocrane/crane/pkg/utils"
 )
 
@@ -144,6 +145,9 @@ func (c *CadvisorCollector) Collect() (map[string][]common.TimeSeries, error) {
 				addSampleToStateMap(types.MetricNameContainerCpuLimit, composeSample(labels, float64(state.stat.Spec.Cpu.Limit), now), stateMap)
 				addSampleToStateMap(types.MetricNameContainerCpuQuota, composeSample(labels, float64(containerInfoV1.Spec.Cpu.Quota), now), stateMap)
 				addSampleToStateMap(types.MetricNameContainerCpuPeriod, composeSample(labels, float64(containerInfoV1.Spec.Cpu.Period), now), stateMap)
+
+				metrics.UpdateContainerCpuSchedstatRunSeconds(pod.Name, pod.UID, pod.Namespace, containerId, containerName, schedRunqueueTime)
+				metrics.AddContainerCpuSchedstatRunSecondsTotal(pod.Name, pod.UID, pod.Namespace, containerId, containerName, schedRunqueueTime)
 
 				klog.V(10).Infof("Pod: %s, containerName: %s, key %s, scheduler run queue time %.2f", klog.KObj(pod), containerName, key, schedRunqueueTime)
 			}

@@ -21,10 +21,14 @@ const (
 
 	AnalyzerStatus      = "analyzer_status"
 	AnalyzerStatusTotal = "analyzer_status_total"
+
 	ExecutorStatus      = "executor_status"
 	ExecutorStatusTotal = "executor_status_total"
 	ExecutorErrorTotal  = "executor_error_total"
 	ExecutorEvictTotal  = "executor_evict_total"
+
+	ContainerCpuSchedstatRunSeconds      = "container_cpu_schedstat_run_seconds"
+	ContainerCpuSchedstatRunSecondsTotal = "container_cpu_schedstat_run_seconds_total"
 )
 
 type StepLabel string
@@ -161,6 +165,26 @@ var (
 			StabilityLevel: k8smetrics.ALPHA,
 		},
 	)
+
+	containerCpuSchedstatRunSeconds = k8smetrics.NewGaugeVec(
+		&k8smetrics.GaugeOpts{
+			Namespace:      CraneNamespace,
+			Subsystem:      CraneAgentSubsystem,
+			Name:           ContainerCpuSchedstatRunSeconds,
+			Help:           "Container cpu schedstat run seconds.",
+			StabilityLevel: k8smetrics.ALPHA,
+		}, []string{"podName", "uid", "namespace", "container", "containerName"},
+	)
+
+	containerCpuSchedstatRunSecondsTotal = k8smetrics.NewCounterVec(
+		&k8smetrics.CounterOpts{
+			Namespace:      CraneNamespace,
+			Subsystem:      CraneAgentSubsystem,
+			Name:           ContainerCpuSchedstatRunSecondsTotal,
+			Help:           "Container cpu schedstat run seconds total.",
+			StabilityLevel: k8smetrics.ALPHA,
+		}, []string{"podName", "uid", "namespace", "container", "containerName"},
+	)
 )
 
 var registerCraneAgentMetricsOnce sync.Once
@@ -234,4 +258,14 @@ func ExecutorErrorCounterInc(subComponent SubComponent, stepName StepLabel) {
 
 func ExecutorEvictCountsInc() {
 	executorEvictCounts.Inc()
+}
+
+func UpdateContainerCpuSchedstatRunSeconds(podName string, uid string, namespace string, container string, containerName string, value float64) {
+	containerCpuSchedstatRunSeconds.With(prometheus.Labels{"podName": podName, "uid": uid, "namespace": namespace,
+		"container": container, "containerName": containerName}).Set(value)
+}
+
+func AddContainerCpuSchedstatRunSecondsTotal(podName string, uid string, namespace string, container string, containerName string, value float64) {
+	containerCpuSchedstatRunSecondsTotal.With(prometheus.Labels{"podName": podName, "uid": uid, "namespace": namespace,
+		"container": container, "containerName": containerName}).Add(value)
 }
