@@ -118,6 +118,24 @@ func (e WaterLines) DivideMetricsByEvictQualified() (MetricsEvictQualified []Wat
 	return
 }
 
+func (e WaterLines) GetMetricsThrottleAble() (ThrottleAbleMetrics []WaterLineMetric) {
+	for m := range e {
+		if MetricMap[m].ThrottleAble == true {
+			ThrottleAbleMetrics = append(ThrottleAbleMetrics, m)
+		}
+	}
+	return
+}
+
+func (e WaterLines) GetMetricsEvictAble() (EvictAbleMetrics []WaterLineMetric) {
+	for m := range e {
+		if MetricMap[m].EvictAble == true {
+			EvictAbleMetrics = append(EvictAbleMetrics, m)
+		}
+	}
+	return
+}
+
 
 // GapToWaterLines's key is metric name, value is the difference between usage and the smallest waterline
 type GapToWaterLines map[WaterLineMetric]float64

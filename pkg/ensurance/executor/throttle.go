@@ -80,7 +80,10 @@ func (t *ThrottleExecutor) Avoid(ctx *ExecuteContext) error {
 
 	// There is a metric that can't be ThrottleQualified, so throttle all selected pods
 	if len(MetricsNotThrottleQualified) != 0 {
-		errPodKeys = t.throttlePods(ctx, &totalReleased, MetricsNotThrottleQualified[0])
+		throttleAbleMetrics := t.ThrottleDownWaterLine.GetMetricsThrottleAble()
+		if len(throttleAbleMetrics) != 0{
+			errPodKeys = t.throttlePods(ctx, &totalReleased, throttleAbleMetrics[0])
+		}
 	} else {
 		ctx.ThrottoleDownGapToWaterLines, _, _ = buildGapToWaterLine(ctx.getStateFunc(), *t, EvictExecutor{})
 		// The metrics in ThrottoleDownGapToWaterLines are all in WaterLineMetricsCanBeQualified and has current usage, then throttle precisely

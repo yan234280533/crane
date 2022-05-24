@@ -185,8 +185,6 @@ func restoreOnePodCpu(ctx *ExecuteContext, index int, ThrottleUpPods ThrottlePod
 		}
 		released = ConstructCpuUsageRelease(ThrottleUpPods[index], containerCPUQuotaNew, v.Value)
 		totalReleasedResource.Add(released)
-
-		ThrottleUpPods[index].HasBeenActioned = true
 	}
 
 	return
